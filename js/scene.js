@@ -37,6 +37,7 @@ float sstep(float a, float b, float x){ float t = clamp((x - a)/(b - a), 0.0, 1.
 
 uniform float uTime, uFill, uHell, uStorm, uFlash, uWhite;
 uniform int uSteps, uOct;
+uniform float uFrame;
 uniform mat4 uInvProj, uCamWorld;
 uniform vec3 uCamPos, uSkyTop, uSkyBot, uLight, uDark, uSun, uSunDir;
 varying vec2 vUv;
@@ -60,7 +61,7 @@ float density(vec3 p, int oct){
   float s = shapeAt(p);
   float d = n - 0.58 + s*0.5 + uFill;
   d -= sstep(24., 55., p.y);
-  return clamp(d*4.2, 0., 1.);
+  return clamp(d*3.0, 0., 1.);
 }
 void main(){
   vec4 ndc = vec4(vUv*2.0-1.0, 1.0, 1.0);
@@ -73,7 +74,9 @@ void main(){
   sky += uSun*(pow(sd, 6.)*0.28 + pow(sd, 90.)*0.9);
   sky = mix(sky, uDark*0.6, uHell*sstep(0.5, 0.0, h)*0.5);
   vec3 col = vec3(0.); float T = 1.;
-  float t = 0.4 + hash(vec3(gl_FragCoord.xy, fract(uTime)))*1.4;
+  // interleaved gradient noise, сдвигается каждый кадр — накопление по времени сглаживает её в ноль
+  float ign = fract(52.9829189*fract(dot(gl_FragCoord.xy + uFrame*5.588238, vec2(0.06711056, 0.00583715))));
+  float t = 0.4 + ign*1.3;
   for(int i=0;i<uSteps;i++){
     vec3 p = ro + rd*t;
     float dt = 0.45 + t*0.058;
@@ -104,12 +107,22 @@ void main(){
 }`;
 
 const QUAD_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv = position.xy*0.5+0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+const RESOLVE_FRAG = /* glsl */`
+precision highp float; uniform sampler2D tCur, tPrev; uniform vec2 uTexel; uniform float uBlend; varying vec2 vUv;
+void main(){
+  vec3 c = texture2D(tCur, vUv).rgb*0.4
+    + (texture2D(tCur, vUv+vec2(uTexel.x,0.)).rgb + texture2D(tCur, vUv-vec2(uTexel.x,0.)).rgb
+     + texture2D(tCur, vUv+vec2(0.,uTexel.y)).rgb + texture2D(tCur, vUv-vec2(0.,uTexel.y)).rgb)*0.15;
+  vec3 p = texture2D(tPrev, vUv).rgb;
+  gl_FragColor = vec4(mix(c, p, uBlend), 1.0);
+}`;
 const BLIT_FRAG = /* glsl */`
-precision highp float; uniform sampler2D tCloud; uniform float uTime, uVig; varying vec2 vUv;
-float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
-void main(){ vec3 c = texture2D(tCloud, vUv).rgb;
+precision highp float; uniform sampler2D tCloud; uniform vec2 uTexel; uniform float uVig; varying vec2 vUv;
+void main(){
+  vec3 c = texture2D(tCloud, vUv).rgb*0.36;
+  c += (texture2D(tCloud, vUv+vec2( uTexel.x, uTexel.y)).rgb + texture2D(tCloud, vUv+vec2(-uTexel.x, uTexel.y)).rgb
+      + texture2D(tCloud, vUv+vec2( uTexel.x,-uTexel.y)).rgb + texture2D(tCloud, vUv+vec2(-uTexel.x,-uTexel.y)).rgb)*0.16;
   vec2 q = vUv-0.5; c *= 1.0 - dot(q,q)*uVig;
-  c += (h(vUv*1000.0+uTime)-0.5)*0.018;
   gl_FragColor = vec4(c,1.0); }`;
 
 function fsTriangle() {
@@ -175,17 +188,16 @@ function crackTexture() {
 
 /* ---------- Материалы ---------- */
 function makeMaterials() {
-  const marbleMap = marbleTexture();
-  const warmMap = marbleTexture([250, 244, 232], [150, 128, 110], 9);
+  // Матовая «скульптурная» стилистика: гипс, сатиновое золото, матовый обсидиан
+  const std = o => new THREE.MeshStandardMaterial({ metalness: 0, roughness: 0.92, envMapIntensity: 0.55, ...o });
   return {
-    marble: new THREE.MeshPhysicalMaterial({ map: marbleMap, roughness: 0.32, clearcoat: 0.55, clearcoatRoughness: 0.28, color: 0xffffff }),
-    marbleWarm: new THREE.MeshPhysicalMaterial({ map: warmMap, roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.3 }),
-    gold: new THREE.MeshPhysicalMaterial({ color: 0xf0c470, metalness: 1, roughness: 0.26, clearcoat: 0.3, envMapIntensity: 2.2 }),
-    obsidian: new THREE.MeshPhysicalMaterial({ color: 0x0b0707, metalness: 0.3, roughness: 0.18, envMapIntensity: 0.3, clearcoat: 1, clearcoatRoughness: 0.05,
-      emissive: 0xffffff, emissiveMap: crackTexture(), emissiveIntensity: 1.6 }),
-    feather: new THREE.MeshPhysicalMaterial({ color: 0xf4efe6, roughness: 0.5, sheen: 1, sheenColor: new THREE.Color(0xfff6e8), sheenRoughness: 0.4, side: THREE.DoubleSide }),
-    water: new THREE.MeshPhysicalMaterial({ color: 0xbfe6ff, roughness: 0.04, metalness: 0.1, transparent: true, opacity: 0.75, clearcoat: 1 }),
-    pomegranate: new THREE.MeshPhysicalMaterial({ color: 0x8a0412, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.1, sheen: 0.5, sheenColor: new THREE.Color(0xff4060) }),
+    marble: std({ color: 0xf4f1ec }),
+    marbleWarm: std({ color: 0xece2d4 }),
+    gold: std({ color: 0xd8b26a, metalness: 0.55, roughness: 0.48, envMapIntensity: 0.9 }),
+    obsidian: std({ color: 0x1a1414, roughness: 0.82, envMapIntensity: 0.25, emissive: 0xffffff, emissiveMap: crackTexture(), emissiveIntensity: 1.6 }),
+    feather: std({ color: 0xfbf8f3, roughness: 0.96, side: THREE.DoubleSide }),
+    water: std({ color: 0xcfe3ee, roughness: 0.55, transparent: true, opacity: 0.85 }),
+    pomegranate: std({ color: 0x9c1a28, roughness: 0.72 }),
   };
 }
 
@@ -281,15 +293,15 @@ function featherGeo(len, wid) {
 function wing(M, side = 1) {
   const g = new THREE.Group();
   const rows = [
-    { n: 13, len: 1.6, wid: 0.55, rad: 2.0, spread: 1.6, z: 0.06 },
-    { n: 15, len: 3.2, wid: 0.62, rad: 3.4, spread: 1.9, z: 0.03 },
-    { n: 12, len: 5.8, wid: 0.75, rad: 5.2, spread: 2.2, z: 0 },
+    { n: 11, len: 1.6, wid: 0.55, rad: 2.2, spread: 1.05, z: 0.06 },
+    { n: 13, len: 3.0, wid: 0.62, rad: 3.6, spread: 1.15, z: 0.03 },
+    { n: 12, len: 5.2, wid: 0.75, rad: 5.4, spread: 1.25, z: 0 },
   ];
   rows.forEach((row, ri) => {
     const geo = featherGeo(row.len, row.wid);
     for (let i = 0; i < row.n; i++) {
       const t = i / (row.n - 1);
-      const ang = lerp(0.15, row.spread, t);
+      const ang = lerp(-0.35, row.spread, t);
       const f = new THREE.Mesh(geo, M.feather);
       const ax = Math.cos(ang) * row.rad * 0.55, ay = Math.sin(ang) * row.rad * 0.35 + 0.4;
       f.position.set(ax * side, ay, row.z - ri * 0.08);
@@ -420,7 +432,7 @@ export async function createWorld(canvas) {
   const rt = new THREE.WebGLRenderTarget(2, 2, { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
   const sunDir = new THREE.Vector3(0.35, 0.55, -0.75).normalize();
   const U = {
-    uSteps: { value: 46 }, uOct: { value: 5 }, uTime: { value: 0 }, uFill: { value: 0 }, uHell: { value: 0 }, uStorm: { value: 0 }, uFlash: { value: 0 }, uWhite: { value: 1 },
+    uSteps: { value: 46 }, uOct: { value: 5 }, uFrame: { value: 0 }, uTime: { value: 0 }, uFill: { value: 0 }, uHell: { value: 0 }, uStorm: { value: 0 }, uFlash: { value: 0 }, uWhite: { value: 1 },
     uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uCamPos: { value: new THREE.Vector3() },
     uSkyTop: { value: hex3(PAL.heaven.top) }, uSkyBot: { value: hex3(PAL.heaven.bot) }, uLight: { value: hex3(PAL.heaven.light) },
     uDark: { value: hex3(PAL.heaven.dark) }, uSun: { value: hex3(PAL.heaven.sun) }, uSunDir: { value: sunDir },
@@ -428,7 +440,12 @@ export async function createWorld(canvas) {
   const cloudMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: CLOUD_FRAG, uniforms: U, depthTest: false, depthWrite: false });
   const quadScene = new THREE.Scene(), quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const quad = new THREE.Mesh(fsTriangle(), cloudMat); quad.frustumCulled = false; quadScene.add(quad);
-  const blitMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: BLIT_FRAG, uniforms: { tCloud: { value: rt.texture }, uTime: { value: 0 }, uVig: { value: 0.6 } }, depthTest: false, depthWrite: false });
+  const rtOpts = { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false };
+  let hist = [new THREE.WebGLRenderTarget(2, 2, rtOpts), new THREE.WebGLRenderTarget(2, 2, rtOpts)];
+  const resolveMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: RESOLVE_FRAG, uniforms: { tCur: { value: rt.texture }, tPrev: { value: null }, uTexel: { value: new THREE.Vector2() }, uBlend: { value: 0 } }, depthTest: false, depthWrite: false });
+  const resolveScene = new THREE.Scene(); const rq = new THREE.Mesh(fsTriangle(), resolveMat); rq.frustumCulled = false; resolveScene.add(rq);
+  let histFresh = true;
+  const blitMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: BLIT_FRAG, uniforms: { tCloud: { value: null }, uTexel: { value: new THREE.Vector2() }, uVig: { value: 0.6 } }, depthTest: false, depthWrite: false });
   const blitScene = new THREE.Scene(); const blit = new THREE.Mesh(fsTriangle(), blitMat); blit.frustumCulled = false; blitScene.add(blit);
 
   function resize() {
@@ -436,7 +453,10 @@ export async function createWorld(canvas) {
     camera.aspect = innerWidth / innerHeight;
     camera.fov = camera.aspect < 0.8 ? 68 : 52;
     camera.updateProjectionMatrix();
-    rt.setSize(Math.max(2, Math.floor(innerWidth * cloudScale)), Math.max(2, Math.floor(innerHeight * cloudScale)));
+    const w = Math.max(2, Math.floor(innerWidth * cloudScale)), h = Math.max(2, Math.floor(innerHeight * cloudScale));
+    rt.setSize(w, h); hist.forEach(r => r.setSize(w, h));
+    resolveMat.uniforms.uTexel.value.set(1 / w, 1 / h); blitMat.uniforms.uTexel.value.set(0.5 / w, 0.5 / h);
+    histFresh = true;
   }
   addEventListener('resize', resize); resize();
 
@@ -852,12 +872,18 @@ uniform float uTime; varying vec2 vUv; void main(){ vec2 q = vUv-0.5; float r = 
 
     for (const f of animators) f(t, dt);
 
-    U.uTime.value = t; blitMat.uniforms.uTime.value = t;
+    U.uTime.value = t; U.uFrame.value = (U.uFrame.value + 1) % 64;
     U.uInvProj.value.copy(camera.projectionMatrixInverse);
     U.uCamWorld.value.copy(camera.matrixWorld);
     U.uCamPos.value.copy(camera.position);
 
     renderer.setRenderTarget(rt); renderer.render(quadScene, quadCam);
+    // накопление по времени: убирает шум шагов raymarching
+    resolveMat.uniforms.tPrev.value = hist[0].texture;
+    resolveMat.uniforms.uBlend.value = histFresh ? 0 : (travel ? 0.55 : 0.86);
+    renderer.setRenderTarget(hist[1]); renderer.render(resolveScene, quadCam);
+    hist = [hist[1], hist[0]]; histFresh = false;
+    blitMat.uniforms.tCloud.value = hist[0].texture;
     renderer.setRenderTarget(null); renderer.clear(); renderer.render(blitScene, quadCam);
     renderer.clearDepth(); renderer.render(scene, camera);
     requestAnimationFrame(frame);
