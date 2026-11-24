@@ -1,6 +1,6 @@
-import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=5';
-import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js?v=5';
-import { createWorld } from './scene.js?v=5';
+import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=6';
+import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js?v=6';
+import { createWorld } from './scene.js?v=6';
 
 const $ = (s, el = document) => el.querySelector(s);
 const ui = $('#ui');
@@ -340,7 +340,7 @@ async function showMine() {
   const pr = portrait(me);
   const partner = state.partnerCode ? decodeProfile(state.partnerCode) : null;
   const link = linkFor(state.myCode);
-  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=5');
+  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=6');
   const el = await show(`
     <div class="kicker">${esc(me.name || 'Безымянный')} · отпечаток от ${fmtDay(me.day)}</div>
     <div class="gap-s"></div>
@@ -359,7 +359,8 @@ async function showMine() {
         <h3>${partner ? 'Отправь свой отпечаток обратно' : 'Позови второго'}</h3>
         <p class="body">${partner ? 'Чтобы и он(а) увидел(а) ваше пророчество, отправь эту ссылку или покажи QR.' : 'Пусть другой человек отсканирует QR или откроет ссылку и пройдёт тест сам, в одиночестве. Сайт сопоставит вас и покажет, что было бы, если бы вы рискнули. Кем бы вы ни были друг другу сейчас.'}</p>
         <div class="code-box"><input readonly value="${esc(link)}" id="lnk"><button id="cp">Копировать</button></div>
-        <div class="code-box"><input placeholder="Вставь ссылку или код другого человека" id="other"><button id="cmp">Сопоставить</button></div>
+        <button class="btn scan-btn" id="scan">◎ Сканировать QR партнёра</button>
+        <div class="code-box"><input placeholder="…или вставь ссылку / код другого человека" id="other"><button id="cmp">Сопоставить</button></div>
       </div>
     </div>
     <p class="retake">Этот отпечаток — снимок сегодняшнего тебя. Эмоции, одиночество, влюблённость, свежие раны меняют его. Возвращайся через месяц или после того, что тебя изменило.</p>
@@ -375,8 +376,65 @@ async function showMine() {
     if (code === state.myCode) return toast('Это твой собственный отпечаток.');
     state.partnerCode = code; showPair();
   };
+  $('#scan', el).onclick = () => scanQR(code => {
+    if (code === state.myCode) return toast('Это твой собственный отпечаток.');
+    state.partnerCode = code; history.replaceState(null, '', location.pathname); showPair();
+  });
   $('#again', el).onclick = restart;
   const pb = $('#pair', el); if (pb) pb.onclick = showPair;
+}
+
+// ---------- сканер QR прямо на сайте (без сервера) ----------
+let jsqrP = null;
+function loadJsQR() {
+  if (window.jsQR) return Promise.resolve();
+  return jsqrP ||= new Promise((ok, no) => {
+    const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+    sc.onload = ok; sc.onerror = () => { jsqrP = null; no(); }; document.head.appendChild(sc);
+  });
+}
+
+async function scanQR(onCode) {
+  if (!navigator.mediaDevices?.getUserMedia) return toast('Камера недоступна в этом браузере. Вставь ссылку вручную.');
+  const ov = document.createElement('div'); ov.className = 'scanner';
+  ov.innerHTML = `<div class="scan-box"><video playsinline muted></video><div class="scan-frame"></div></div>
+    <p class="scan-tip">Наведи камеру на QR другого человека</p><button class="btn-ghost scan-close">Закрыть</button>`;
+  document.body.appendChild(ov);
+  const video = ov.querySelector('video');
+  let stream = null, alive = true;
+  const close = () => { alive = false; stream?.getTracks().forEach(t => t.stop()); ov.remove(); };
+  ov.querySelector('.scan-close').onclick = close;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+  } catch (e) { close(); return toast('Нет доступа к камере. Разреши его в настройках браузера или вставь ссылку вручную.'); }
+  if (!alive) return stream.getTracks().forEach(t => t.stop());
+  video.srcObject = stream; video.play().catch(() => {}); // не ждём: в некоторых WebKit промис висит
+  let detect;
+  if ('BarcodeDetector' in window) {
+    try { const bd = new BarcodeDetector({ formats: ['qr_code'] }); detect = async () => (await bd.detect(video))[0]?.rawValue; } catch (e) {}
+  }
+  if (!detect) {
+    try { await loadJsQR(); } catch (e) { close(); return toast('Не удалось загрузить сканер. Проверь интернет.'); }
+    const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+    detect = async () => {
+      const w = video.videoWidth, h = video.videoHeight; if (!w || video.readyState < 2) return null;
+      const k = Math.min(1, 640 / Math.max(w, h)); cv.width = w * k | 0; cv.height = h * k | 0;
+      cx.drawImage(video, 0, 0, cv.width, cv.height);
+      return window.jsQR(cx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height, { inversionAttempts: 'dontInvert' })?.data;
+    };
+  }
+  let warned = false;
+  const tick = async () => {
+    if (!alive) return;
+    let txt = null; try { txt = await detect(); } catch (e) {}
+    if (txt) {
+      const m = txt.match(/with=([A-Za-z0-9_-]+)/); const code = m ? m[1] : txt.trim();
+      if (decodeProfile(code)) { navigator.vibrate?.(40); close(); return onCode(code); }
+      if (!warned) { warned = true; toast('Это не QR из «ДВОЕ»'); setTimeout(() => (warned = false), 2500); }
+    }
+    setTimeout(tick, 120);
+  };
+  tick();
 }
 
 function copy(text) {
@@ -402,7 +460,7 @@ async function showPair() {
   const A = decodeProfile(state.myCode), B = decodeProfile(state.partnerCode);
   if (!A || !B) return toast('Не удалось прочитать отпечатки');
   const P = prophecy(A, B, state.myCode, state.partnerCode);
-  const { LOVE_ASPECTS } = await import('./content.js?v=5');
+  const { LOVE_ASPECTS } = await import('./content.js?v=6');
   const x = P.c.axes;
   if (P.key === 'serpent' || P.key === 'storm') { setDark('hades'); await world.goTo('hades', { dur: 4 }); }
   else if (world.current !== 'oracle') { setDark('oracle'); await world.goTo('oracle'); }
