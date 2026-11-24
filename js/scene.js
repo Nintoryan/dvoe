@@ -33,6 +33,8 @@ const stationPos = i => new THREE.Vector3(0, 0, -i * SPACING);
 /* ---------- Шейдер облаков ---------- */
 const CLOUD_FRAG = /* glsl */`
 precision highp float;
+float sstep(float a, float b, float x){ float t = clamp((x - a)/(b - a), 0.0, 1.0); return t*t*(3.0 - 2.0*t); }
+
 uniform float uTime, uFill, uHell, uStorm, uFlash, uWhite;
 uniform int uSteps, uOct;
 uniform mat4 uInvProj, uCamWorld;
@@ -46,8 +48,8 @@ float fbm(vec3 p, int oct){ float a = .5, s = 0.; for(int i=0;i<oct;i++){ s += a
 float shapeAt(vec3 p){
   vec2 d2 = vec2(p.x*0.55, (p.y-2.0)*1.1);
   float r = length(d2);
-  float wall = smoothstep(11.0, 34.0, r);
-  float sea = smoothstep(-5.0, -16.0, p.y);
+  float wall = sstep(11.0, 34.0, r);
+  float sea = sstep(-5.0, -16.0, p.y);
   return max(wall, sea);
 }
 float density(vec3 p, int oct){
@@ -57,7 +59,7 @@ float density(vec3 p, int oct){
   float n = fbm(q, oct);
   float s = shapeAt(p);
   float d = n - 0.58 + s*0.5 + uFill;
-  d -= smoothstep(24., 55., p.y);
+  d -= sstep(24., 55., p.y);
   return clamp(d*4.2, 0., 1.);
 }
 void main(){
@@ -66,10 +68,10 @@ void main(){
   vec3 rd = normalize((uCamWorld*vec4(v.xyz,0.0)).xyz);
   vec3 ro = uCamPos;
   float h = clamp(rd.y*0.5+0.5, 0., 1.);
-  vec3 sky = mix(uSkyBot, uSkyTop, smoothstep(0.47, 0.8, h));
+  vec3 sky = mix(uSkyBot, uSkyTop, sstep(0.47, 0.8, h));
   float sd = max(dot(rd, uSunDir), 0.);
   sky += uSun*(pow(sd, 6.)*0.28 + pow(sd, 90.)*0.9);
-  sky = mix(sky, uDark*0.6, uHell*smoothstep(0.5, 0.0, h)*0.5);
+  sky = mix(sky, uDark*0.6, uHell*sstep(0.5, 0.0, h)*0.5);
   vec3 col = vec3(0.); float T = 1.;
   float t = 0.4 + hash(vec3(gl_FragCoord.xy, fract(uTime)))*1.4;
   for(int i=0;i<uSteps;i++){
@@ -83,7 +85,7 @@ void main(){
       float hgt = clamp((p.y + 16.0)/40.0, 0., 1.);
       vec3 amb = mix(uDark, mix(uDark, uSkyTop, 0.5), hgt);
       vec3 lit = amb + (uLight - uDark*0.6)*shadow*1.05;
-      float under = smoothstep(4.0, -14.0, p.y);
+      float under = sstep(4.0, -14.0, p.y);
       lit += uHell*vec3(1.0,0.22,0.04)*under*0.9;
       lit = mix(lit, lit*0.55, uStorm*(1.0-shadow));
       lit += uFlash*vec3(0.85,0.9,1.0)*(0.6+0.6*shadow);
@@ -97,7 +99,7 @@ void main(){
   }
   col += T*sky;
   col = mix(col, uLight*1.02, uWhite);
-  if (any(isnan(col))) col = sky;
+  col = max(col, vec3(0.0));
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
@@ -314,13 +316,15 @@ function particles(count, spread, { color = 0xffe7a8, size = 0.12, rise = 0.3, a
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
     uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(color) }, uSize: { value: size }, uRise: { value: rise }, uSpan: { value: spread * box[1] }, uOpacity: { value: 1 } },
-    vertexShader: `attribute float seed; uniform float uTime, uSize, uRise, uSpan; varying float vA;
+    vertexShader: `float sstep(float a, float b, float x){ float t = clamp((x - a)/(b - a), 0.0, 1.0); return t*t*(3.0 - 2.0*t); }
+attribute float seed; uniform float uTime, uSize, uRise, uSpan; varying float vA;
       void main(){ vec3 p = position; p.y = mod(p.y + uTime*uRise*(0.4+seed) + uSpan*0.5, uSpan) - uSpan*0.5;
         p.x += sin(uTime*0.4 + seed*30.0)*0.6; p.z += cos(uTime*0.3 + seed*20.0)*0.6;
         vec4 mv = modelViewMatrix*vec4(p,1.0); gl_Position = projectionMatrix*mv;
         gl_PointSize = uSize*(300.0/-mv.z)*(0.6+seed*0.8);
-        vA = (0.5+0.5*sin(uTime*2.0+seed*40.0)) * smoothstep(uSpan*0.5, uSpan*0.3, abs(p.y)); }`,
-    fragmentShader: `uniform vec3 uColor; uniform float uOpacity; varying float vA; void main(){ float d = length(gl_PointCoord-0.5); float a = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(uColor, a*vA*uOpacity); }`,
+        vA = (0.5+0.5*sin(uTime*2.0+seed*40.0)) * sstep(uSpan*0.5, uSpan*0.3, abs(p.y)); }`,
+    fragmentShader: `float sstep(float a, float b, float x){ float t = clamp((x - a)/(b - a), 0.0, 1.0); return t*t*(3.0 - 2.0*t); }
+uniform vec3 uColor; uniform float uOpacity; varying float vA; void main(){ float d = length(gl_PointCoord-0.5); float a = sstep(0.5, 0.0, d); gl_FragColor = vec4(uColor, a*vA*uOpacity); }`,
   });
   const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; return pts;
 }
@@ -334,7 +338,8 @@ function fountainWater(count = 1800) {
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     uniforms: { uTime: { value: 0 } },
-    vertexShader: `attribute vec2 seed; uniform float uTime; varying float vA;
+    vertexShader: `float sstep(float a, float b, float x){ float t = clamp((x - a)/(b - a), 0.0, 1.0); return t*t*(3.0 - 2.0*t); }
+attribute vec2 seed; uniform float uTime; varying float vA;
       void main(){ float T = 1.6; float t = mod(uTime + seed.x*T, T);
         float ang = seed.y*6.2831; float tier = step(0.55, seed.x);
         vec3 o = mix(vec3(0., 5.7, 0.), vec3(0., 3.35, 0.), tier);
@@ -343,8 +348,9 @@ function fountainWater(count = 1800) {
         vec3 p = o + v*t + vec3(0., -4.9*t*t, 0.);
         vec4 mv = modelViewMatrix*vec4(p,1.0); gl_Position = projectionMatrix*mv;
         gl_PointSize = 4.0*(30.0/-mv.z)*(0.6+seed.y);
-        vA = smoothstep(0.0, 0.1, t) * (1.0 - t/T); }`,
-    fragmentShader: `varying float vA; void main(){ float d = length(gl_PointCoord-0.5); gl_FragColor = vec4(0.8,0.92,1.0, smoothstep(0.5,0.0,d)*vA*0.8); }`,
+        vA = sstep(0.0, 0.1, t) * (1.0 - t/T); }`,
+    fragmentShader: `float sstep(float a, float b, float x){ float t = clamp((x - a)/(b - a), 0.0, 1.0); return t*t*(3.0 - 2.0*t); }
+varying float vA; void main(){ float d = length(gl_PointCoord-0.5); gl_FragColor = vec4(0.8,0.92,1.0, sstep(0.5,0.0,d)*vA*0.8); }`,
   });
   const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; return pts;
 }
@@ -355,8 +361,9 @@ function lightShaft(h = 30, r = 4, color = 0xfff1cc, op = 0.18) {
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
     uniforms: { uColor: { value: new THREE.Color(color) }, uOp: { value: op }, uTime: { value: 0 } },
     vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv = uv; vN = normalize(normalMatrix*normal); vec4 mv = modelViewMatrix*vec4(position,1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
-    fragmentShader: `uniform vec3 uColor; uniform float uOp, uTime; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
-      void main(){ float rim = pow(abs(dot(vN, vV)), 1.5); float fade = smoothstep(0.0, 0.4, vUv.y)*smoothstep(1.0, 0.7, vUv.y);
+    fragmentShader: `float sstep(float a, float b, float x){ float t = clamp((x - a)/(b - a), 0.0, 1.0); return t*t*(3.0 - 2.0*t); }
+uniform vec3 uColor; uniform float uOp, uTime; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+      void main(){ float rim = pow(abs(dot(vN, vV)), 1.5); float fade = sstep(0.0, 0.4, vUv.y)*sstep(1.0, 0.7, vUv.y);
         float flick = 0.85 + 0.15*sin(uTime*1.3 + vUv.x*40.0);
         gl_FragColor = vec4(uColor, rim*fade*uOp*flick); }`,
   });
@@ -659,12 +666,13 @@ export async function createWorld(canvas) {
   const portal = new THREE.Mesh(new THREE.PlaneGeometry(9.4, 12.2), new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, uniforms: { uTime: { value: 0 } },
     vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader: `uniform float uTime; varying vec2 vUv;
+    fragmentShader: `float sstep(float a, float b, float x){ float t = clamp((x - a)/(b - a), 0.0, 1.0); return t*t*(3.0 - 2.0*t); }
+uniform float uTime; varying vec2 vUv;
       float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
       float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
       void main(){ vec2 q = vUv*vec2(3.,4.); float f = 0.; float a = .5; vec2 p = q + vec2(0., -uTime*0.6);
         for(int i=0;i<5;i++){ f += a*n(p); p *= 2.1; a *= .5; }
-        float edge = smoothstep(0.0, 0.18, vUv.x)*smoothstep(1.0, 0.82, vUv.x)*smoothstep(0.0,0.1,vUv.y)*smoothstep(1.0,0.9,vUv.y);
+        float edge = sstep(0.0, 0.18, vUv.x)*sstep(1.0, 0.82, vUv.x)*sstep(0.0,0.1,vUv.y)*sstep(1.0,0.9,vUv.y);
         float glow = pow(f, 2.2)*1.8*(1.0-vUv.y*0.6);
         vec3 col = mix(vec3(0.02,0.0,0.0), vec3(1.0,0.32,0.05), glow) + vec3(1.,.7,.3)*pow(glow,4.)*0.6;
         gl_FragColor = vec4(col, edge*0.97); }`,
@@ -706,7 +714,7 @@ export async function createWorld(canvas) {
         vec2 p = vec2(a*1.5 + uTime*0.05 + r*3.0, r*6.0 - uTime*0.15);
         float f = 0.; float am = .5; for(int i=0;i<5;i++){ f += am*n(p*2.0); p *= 2.0; am *= .5; }
         vec3 c = mix(vec3(1.0,0.96,0.94), vec3(0.93,0.78,0.78), f);
-        c += vec3(1.0,0.9,0.7)*pow(1.0-r*2.0, 3.0)*0.5;
+        c += vec3(1.0,0.9,0.7)*pow(max(1.0-r*2.0, 0.0), 3.0)*0.5;
         float stars = step(0.996, h(floor(vUv*300.0)))*0.8*(0.5+0.5*sin(uTime*3.0+h(floor(vUv*300.0))*50.));
         gl_FragColor = vec4(c + stars, 1.0); }`,
   }));
@@ -721,9 +729,10 @@ export async function createWorld(canvas) {
   const sunDisk = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uTime: { value: 0 } },
     vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader: `uniform float uTime; varying vec2 vUv; void main(){ vec2 q = vUv-0.5; float r = length(q); float a = atan(q.y,q.x);
-      float rays = pow(0.5+0.5*sin(a*24.0 + uTime*0.2), 8.0)*smoothstep(0.5, 0.05, r)*0.5 + pow(0.5+0.5*sin(a*9.0 - uTime*0.13), 6.0)*smoothstep(0.5,0.1,r)*0.3;
-      float core = smoothstep(0.12, 0.0, r) + smoothstep(0.35, 0.0, r)*0.35;
+    fragmentShader: `float sstep(float a, float b, float x){ float t = clamp((x - a)/(b - a), 0.0, 1.0); return t*t*(3.0 - 2.0*t); }
+uniform float uTime; varying vec2 vUv; void main(){ vec2 q = vUv-0.5; float r = length(q); float a = atan(q.y,q.x);
+      float rays = pow(0.5+0.5*sin(a*24.0 + uTime*0.2), 8.0)*sstep(0.5, 0.05, r)*0.5 + pow(0.5+0.5*sin(a*9.0 - uTime*0.13), 6.0)*sstep(0.5,0.1,r)*0.3;
+      float core = sstep(0.12, 0.0, r) + sstep(0.35, 0.0, r)*0.35;
       vec3 c = vec3(1.0,0.82,0.48)*(rays + core);
       gl_FragColor = vec4(c, clamp(rays+core,0.,1.)); }`,
   }));

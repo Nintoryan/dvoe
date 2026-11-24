@@ -1,6 +1,6 @@
-import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js';
-import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js';
-import { createWorld } from './scene.js';
+import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=3';
+import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js?v=3';
+import { createWorld } from './scene.js?v=3';
 
 const $ = (s, el = document) => el.querySelector(s);
 const ui = $('#ui');
@@ -340,7 +340,7 @@ async function showMine() {
   const pr = portrait(me);
   const partner = state.partnerCode ? decodeProfile(state.partnerCode) : null;
   const link = linkFor(state.myCode);
-  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js');
+  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=3');
   const el = await show(`
     <div class="kicker">${esc(me.name || 'Безымянный')} · отпечаток от ${fmtDay(me.day)}</div>
     <div class="gap-s"></div>
@@ -402,7 +402,7 @@ async function showPair() {
   const A = decodeProfile(state.myCode), B = decodeProfile(state.partnerCode);
   if (!A || !B) return toast('Не удалось прочитать отпечатки');
   const P = prophecy(A, B, state.myCode, state.partnerCode);
-  const { LOVE_ASPECTS } = await import('./content.js');
+  const { LOVE_ASPECTS } = await import('./content.js?v=3');
   const x = P.c.axes;
   if (P.key === 'serpent' || P.key === 'storm') { setDark('hades'); await world.goTo('hades', { dur: 4 }); }
   else if (world.current !== 'oracle') { setDark('oracle'); await world.goTo('oracle'); }

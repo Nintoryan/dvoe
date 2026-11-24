@@ -1,5 +1,5 @@
 // Профиль, кодирование «отпечатка», совместимость и пророчество.
-import { CONTENT_VERSION, LOVE_ASPECTS, COMFORT_ASPECTS } from './content.js';
+import { CONTENT_VERSION, LOVE_ASPECTS, COMFORT_ASPECTS } from './content.js?v=3';
 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const avg = (...xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
