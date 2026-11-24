@@ -31,8 +31,10 @@ const SPACING = 110;
 const stationPos = i => new THREE.Vector3(0, 0, -i * SPACING);
 
 /* ---------- Шейдер облаков ---------- */
+const DBG = (new URLSearchParams(location.search).get('dbg') | 0);
 const CLOUD_FRAG = /* glsl */`
 precision highp float;
+#define DBG ${DBG}
 float sstep(float a, float b, float x){ float t = clamp((x - a)/(b - a), 0.0, 1.0); return t*t*(3.0 - 2.0*t); }
 
 uniform float uTime, uFill, uHell, uStorm, uFlash, uWhite;
@@ -45,7 +47,13 @@ float hash(vec3 p){ p = fract(p*0.3183099 + .1); p *= 17.0; return fract(p.x*p.y
 float noise(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f*f*(3.0-2.0*f);
   return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x), mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x), mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y), f.z); }
-float fbm(vec3 p, int oct){ float a = .5, s = 0.; for(int i=0;i<oct;i++){ s += a*noise(p); p = p*2.07 + vec3(1.7,9.2,3.1); a *= .5; } return s; }
+float fbm(vec3 p, int oct){ float a = .5, s = 0.;
+#if DBG == 4
+  for(int i=0;i<5;i++){ if (i>=oct) break;
+#else
+  for(int i=0;i<oct;i++){
+#endif
+  s += a*noise(p); p = p*2.07 + vec3(1.7,9.2,3.1); a *= .5; } return s; }
 float shapeAt(vec3 p){
   vec2 d2 = vec2(p.x*0.55, (p.y-2.0)*1.1);
   float r = length(d2);
@@ -56,7 +64,9 @@ float shapeAt(vec3 p){
 float density(vec3 p, int oct){
   vec3 q = p*0.034 + vec3(uTime*0.008, -uTime*0.002, uTime*0.004);
   // лёгкое искривление пространства — «цветная капуста» кучевых облаков
+#if DBG != 2
   q += 0.35*vec3(noise(q*1.7+3.1), noise(q*1.7+7.4), noise(q*1.7+1.3));
+#endif
   float n = fbm(q, oct);
   float s = shapeAt(p);
   float d = n - 0.58 + s*0.5 + uFill;
@@ -77,13 +87,23 @@ void main(){
   // interleaved gradient noise, сдвигается каждый кадр — накопление по времени сглаживает её в ноль
   float ign = fract(52.9829189*fract(dot(gl_FragCoord.xy + uFrame*5.588238, vec2(0.06711056, 0.00583715))));
   float t = 0.4 + ign*1.3;
+#if DBG == 3
+  for(int i=0;i<0;i++){
+#elif DBG == 4
+  for(int i=0;i<46;i++){
+#else
   for(int i=0;i<uSteps;i++){
+#endif
     vec3 p = ro + rd*t;
     float dt = 0.45 + t*0.058;
     float den = density(p, uOct);
     if(den > 0.005){
+#if DBG == 1
+      float ls = 0.0, ls2 = 0.0;
+#else
       float ls = density(p + uSunDir*2.6, uOct-2);
       float ls2 = density(p + uSunDir*7.0, uOct-3);
+#endif
       float shadow = exp(-(ls*2.2 + ls2*1.4));
       float hgt = clamp((p.y + 16.0)/40.0, 0., 1.);
       vec3 amb = mix(uDark, mix(uDark, uSkyTop, 0.5), hgt);
@@ -161,16 +181,20 @@ function marbleTexture(tint = [255, 255, 255], vein = [120, 118, 125], seed = 3)
 }
 
 function puffTexture() {
-  const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const ctx = c.getContext('2d');
-  const r = mulberry(7);
-  for (let i = 0; i < 70; i++) {
-    const a = r() * Math.PI * 2, d = Math.pow(r(), 0.7) * S * 0.28;
-    const x = S / 2 + Math.cos(a) * d, y = S / 2 + Math.sin(a) * d * 0.7, rad = S * (0.08 + r() * 0.16);
-    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
-    g.addColorStop(0, 'rgba(255,255,255,0.22)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+  // Белый цвет + только альфа, без canvas: canvas в WebKit искажает цвет почти прозрачных пикселей
+  const S = 128, data = new Uint8Array(S * S * 4), r = mulberry(7);
+  const blobs = Array.from({ length: 40 }, () => {
+    const a = r() * Math.PI * 2, d = Math.pow(r(), 0.7) * 0.28;
+    return [0.5 + Math.cos(a) * d, 0.5 + Math.sin(a) * d * 0.7, 0.08 + r() * 0.16];
+  });
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let al = 0;
+    for (const [bx, by, br] of blobs) { const dx = x / S - bx, dy = y / S - by; al += 0.22 * Math.max(0, 1 - Math.hypot(dx, dy) / br) ** 2; }
+    const i = (y * S + x) * 4;
+    data[i] = data[i + 1] = data[i + 2] = 255; data[i + 3] = Math.min(255, al * 255);
   }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  const t = new THREE.DataTexture(data, S, S); t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t;
 }
 
 function crackTexture() {
@@ -539,13 +563,9 @@ export async function createWorld(canvas) {
   fountain.add(basin, stem, bowl, stem2, water1, water2, spray);
   fountain.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   fountain.position.set(0, -4.5, -9); bio.add(fountain);
-  const apple = new THREE.Group();
-  const appleBody = new THREE.Mesh(lathe(Array.from({ length: 24 }, (_, i) => { const a = (i / 23) * Math.PI; return [Math.sin(a) * (0.9 + 0.12 * Math.sin(a * 2)), -Math.cos(a) * 0.95 + (i < 3 || i > 20 ? 0.12 * (i < 3 ? 1 : -1) : 0)]; }), 64), M.gold);
-  const leaf = new THREE.Mesh(featherGeo(0.9, 0.35), M.gold); leaf.position.set(0.05, 0.9, 0); leaf.rotation.z = -0.8;
-  apple.add(appleBody, leaf); apple.position.set(5.5, 3.2, -6); bio.add(apple);
   for (let i = 0; i < 4; i++) { const cl = column(M, 6 + (i % 2) * 2.5, 0.5); cl.position.set(i < 2 ? -9 - i * 3 : 9 + (i - 2) * 3, -4.5, -13 - (i % 2) * 3); bio.add(cl); }
   addPuffs(bio, 16, 4);
-  anim(t => { spray.material.uniforms.uTime.value = t; apple.rotation.y = t * 0.5; apple.position.y = 3.2 + Math.sin(t * 0.9) * 0.4; });
+  anim(t => { spray.material.uniforms.uTime.value = t; });
 
   /* --- TEMPLE: колоннада --- */
   const temple = realmGroup('temple');
@@ -704,18 +724,12 @@ uniform float uTime; varying vec2 vUv;
   const pfH = platform(M, 12, M.obsidian); pfH.position.set(0, -6, -12); hades.add(pfH);
   const embers = particles(1400, 46, { size: 0.14, rise: 1.6, color: 0xff6a1a }); hades.add(embers);
   const ash = particles(600, 46, { size: 0.1, rise: -0.3, color: 0x3a2a2a, additive: false }); hades.add(ash);
-  const pom = new THREE.Group();
-  const pomBody = new THREE.Mesh(lathe(Array.from({ length: 26 }, (_, i) => { const a = (i / 25) * Math.PI; return [Math.sin(a) * (1 + 0.06 * Math.sin(a * 5)), -Math.cos(a)]; }), 72), M.pomegranate);
-  const crown = new THREE.Group();
-  for (let k = 0; k < 6; k++) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.45, 8), M.pomegranate); const a = k / 6 * Math.PI * 2; s.position.set(Math.cos(a) * 0.22, 1.12, Math.sin(a) * 0.22); s.rotation.set(Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4); crown.add(s); }
-  pom.add(pomBody, crown); pom.position.set(-7.5, 3.5, -6); hades.add(pom);
   for (let i = 0; i < 6; i++) { const cl = column(M, 5 + (i % 3) * 3.5, 0.55, M.obsidian); cl.position.set(i < 3 ? -12 - i * 2.4 : 12 + (i - 3) * 2.4, -6, -10 - (i % 3) * 4); cl.rotation.z = (i % 2 ? 0.08 : -0.06); hades.add(cl); }
   addPuffs(hades, 18, 10, { tint: 0x3a0c08 });
   anim(t => {
     embers.material.uniforms.uTime.value = t; ash.material.uniforms.uTime.value = t;
     portal.material.uniforms.uTime.value = t;
     M.obsidian.emissiveIntensity = 1.3 + Math.sin(t * 1.7) * 0.5;
-    pom.rotation.y = t * 0.35; pom.position.y = 3.5 + Math.sin(t * 0.8) * 0.3;
     fireLight.intensity = palMix.hell * (180 + Math.sin(t * 7) * 30 + Math.sin(t * 13) * 20);
   });
   fireLight.position.set(0, -2, -REALMS.hades.i * SPACING - 8);
