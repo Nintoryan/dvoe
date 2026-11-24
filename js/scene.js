@@ -97,7 +97,8 @@ void main(){
   }
   col += T*sky;
   col = mix(col, uLight*1.02, uWhite);
-  gl_FragColor = vec4(col, 1.0);
+  if (any(isnan(col))) col = sky;
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
 const QUAD_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv = position.xy*0.5+0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
@@ -408,7 +409,8 @@ export async function createWorld(canvas) {
 
   // облака
   let cloudScale = 0.42;
-  const rt = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false });
+  // 8-битная цель: в Safari half-float буфер бывает неполным и даёт цветной «мусор»
+  const rt = new THREE.WebGLRenderTarget(2, 2, { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
   const sunDir = new THREE.Vector3(0.35, 0.55, -0.75).normalize();
   const U = {
     uSteps: { value: 46 }, uOct: { value: 5 }, uTime: { value: 0 }, uFill: { value: 0 }, uHell: { value: 0 }, uStorm: { value: 0 }, uFlash: { value: 0 }, uWhite: { value: 1 },
