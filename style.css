@@ -305,6 +305,68 @@ body.reading.dark #veil { background: radial-gradient(ellipse 70% 65% at 50% 50%
 .why p + p { margin-top: 8px; }
 .axes-cap { max-width: 860px; margin-top: 14px; font-size: 13px; line-height: 1.55; color: var(--ink-soft); }
 
+
+/* ---------- Развёрнутые результаты ---------- */
+.elem { margin-top: 18px; max-width: 760px; font-size: 15px; line-height: 1.55; color: var(--ink-soft); }
+.elem b { color: var(--gold); font-weight: 700; }
+.sec { max-width: 860px; width: 100%; margin-top: 22px; padding: 36px 40px; text-align: left; }
+.sec h4 { font-size: 11px; letter-spacing: .34em; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; font-weight: 700; }
+.sec p { font-size: 15.5px; line-height: 1.6; color: var(--ink-soft); margin-top: 8px; }
+.sec .cap { margin: 0 0 20px; font-size: 14px; }
+.sec .nums { font-size: 12.5px; letter-spacing: .06em; color: var(--ink-faint); }
+.sec .ls span { color: var(--gold); font-weight: 600; }
+.sec .ls.sh span { color: var(--ink); opacity: .7; }
+.big-name { font-family: var(--serif); font-weight: 900; font-size: clamp(28px, 3vw, 38px); line-height: 1.05; color: var(--ink); margin: 6px 0 4px; }
+.duo { max-width: 860px; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.duo > .sec { margin-top: 22px; max-width: none; }
+.duo.in { margin: 0; gap: 26px; }
+.duo.in b { display: block; font-size: 11px; letter-spacing: .26em; text-transform: uppercase; margin-bottom: 4px; }
+.duo.in b.ok { color: var(--gold); } .duo.in b.no { color: var(--ink-soft); }
+.meter { height: 6px; border-radius: 6px; background: var(--ink-faint); opacity: .9; overflow: hidden; margin-top: 8px; }
+.meter i { display: block; height: 100%; width: 0; border-radius: 6px; background: linear-gradient(90deg, var(--gold-soft), var(--gold)); transition: width 1.6s var(--ease); }
+.trait { padding: 18px 0; border-top: 1px solid var(--ink-faint); }
+.trait:first-of-type { border-top: 0; padding-top: 4px; }
+.th { display: flex; align-items: baseline; gap: 12px; }
+.th b { font-family: var(--serif); font-size: 24px; font-weight: 600; color: var(--ink); }
+.th span { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-faint); }
+.th em { margin-left: auto; font-style: normal; font-family: var(--serif); font-weight: 900; font-size: 22px; color: var(--gold); }
+.mini { display: grid; grid-template-columns: 1fr 120px 72px; gap: 12px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--ink-soft); }
+.mini .meter { margin-top: 0; }
+.mini em { font-style: normal; white-space: nowrap; text-align: right; font-size: 12px; color: var(--ink-faint); }
+.lv { margin-top: 18px; } .lv:first-of-type { margin-top: 0; }
+.curve { width: 100%; height: 130px; display: block; margin: 4px 0 6px; overflow: visible; }
+.curve .area { fill: var(--gold-soft); opacity: .35; }
+.curve .line { fill: none; stroke: var(--gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.curve .band { fill: var(--gold); opacity: .12; }
+.curve text { font-size: 9px; fill: var(--ink-faint); font-family: var(--sans); }
+.heartmap { width: min(240px, 100%); display: block; margin: 0 auto 6px; }
+.heartmap .frame { fill: none; stroke: var(--ink-faint); }
+.heartmap line { stroke: var(--ink-faint); stroke-dasharray: 3 4; }
+.heartmap text { font-size: 11px; fill: var(--ink-soft); text-anchor: middle; font-family: var(--serif2); font-style: italic; }
+.heartmap text.ax { font-size: 8.5px; font-family: var(--sans); font-style: normal; fill: var(--ink-faint); letter-spacing: .08em; }
+.heartmap .dot { fill: var(--gold); } .heartmap .halo { fill: var(--gold-soft); opacity: .45; }
+.counts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 26px; margin-top: 22px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+.counts b { font-family: var(--serif); font-size: 22px; letter-spacing: 0; color: var(--gold); margin-right: 4px; }
+.seasons { max-width: 980px; width: 100%; margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.season { padding: 26px 20px 22px; text-align: center; }
+.season .sg { font-size: 26px; color: var(--gold); line-height: 1; }
+.season .sn { font-family: var(--serif); font-weight: 900; font-size: 26px; margin-top: 8px; }
+.season .ss { font-size: 11px; letter-spacing: .26em; text-transform: uppercase; color: var(--ink-faint); margin-top: 2px; }
+.season .sv { font-family: var(--serif); font-weight: 900; font-size: 40px; color: var(--gold); margin-top: 10px; line-height: 1; }
+.season .sv.steps { display: flex; justify-content: center; gap: 6px; height: 40px; align-items: center; }
+.season .sv.steps i { width: 22px; height: 8px; border-radius: 4px; background: var(--ink-faint); }
+.season .sv.steps i.on { background: var(--gold); }
+.season .sl { font-size: 13px; font-weight: 600; margin-top: 10px; }
+.season p { font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); margin-top: 8px; text-wrap: pretty; }
+@media (max-width: 760px) {
+  .sec { padding: 26px 22px; }
+  .duo { grid-template-columns: 1fr; gap: 0; }
+  .duo.in { gap: 18px; }
+  .seasons { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .season { padding: 20px 14px; }
+  .mini { grid-template-columns: 1fr 64px 84px; gap: 8px; }
+}
+
 /* WebKit обрезает текст по рамке блока, пока на нём висит filter (анимация rise).
    У серифных заголовков маленький line-height, и надстрочные/подстрочные части букв
    вылезают за рамку — даём им место, не меняя раскладку. */

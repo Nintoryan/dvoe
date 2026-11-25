@@ -1,5 +1,6 @@
-import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=10';
-import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp } from './engine.js?v=10';
+import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=11';
+import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, ELEMENTS } from './engine.js?v=11';
+import { deepPortrait } from './reading.js?v=11';
 import { createWorld } from './scene.js?v=10';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -355,18 +356,21 @@ async function showMine() {
   const pr = portrait(me, state.heart);
   const partner = state.partnerCode ? decodeProfile(state.partnerCode) : null;
   const link = linkFor(state.myCode);
-  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=10');
+  const el0 = deepPortrait(me).element;
+  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=11');
   const el = await show(`
     <div class="kicker">${esc(me.name || 'Безымянный')} · отпечаток от ${fmtDay(me.day)}</div>
     <div class="gap-s"></div>
     <div class="arch-name">${pr.noun}</div>
     <div class="arch-sub">${pr.attach}</div>
+    <div class="elem">${el0.glyph} Стихия — <b>${el0.name}</b>: ${el0.d}</div>
     <div class="paper glass">${pr.lines.map(l => `<p>${l}</p>`).join('')}${pr.now ? `<p><em>${pr.now}</em></p>` : ''}</div>
     <div class="bars">
       ${bars('Чтобы чувствовать любовь', LOVE_ASPECTS, me.rec)}
       ${bars('Как ты любишь', LOVE_ASPECTS, me.giv)}
       ${bars('Счастливая жизнь', COMFORT_ASPECTS, me.com)}
     </div>
+    ${deepMine(me)}
     ${partner ? `<div class="gap"></div><div class="kicker">${esc(partner.name || 'Другой человек')} уже прошёл(ла) свой путь</div><div class="gap-s"></div><div><button class="btn-giant" id="pair">ПРОРОЧЕСТВО</button></div>` : ''}
     <div class="share glass">
       <div class="qr">${qrSvg(link)}</div>
@@ -381,9 +385,9 @@ async function showMine() {
     <p class="retake">Этот отпечаток — снимок сегодняшнего тебя. Эмоции, одиночество, влюблённость, свежие раны меняют его. Возвращайся через месяц или после того, что тебя изменило.</p>
     <div class="gap"></div>
     <div class="row"><button class="btn-ghost" id="again">Пройти заново</button></div>
-    <p class="disclaimer">«ДВОЕ» — рефлексивный тест, основанный на идеях из психологии отношений (Big Five, теория привязанности, исследования Дж. Готтмана и др.). Это не диагноз и не научный прогноз. Пророчество — метафора, а не приговор. Ответы не отправляются на сервер: всё считается в твоём браузере. Код-отпечаток зашифрован и содержит только сводные оценки, без отдельных ответов. Второй человек увидит пророчество пары: по бытовым темам (ритм, деньги, порядок, выходные) оно прямо говорит, совпадаете вы или сильно расходитесь, а близость, верность, конфликты и прошлое видны только в общем виде, размытом туманом.</p>
+    <p class="disclaimer">«ДВОЕ» — рефлексивный тест, основанный на идеях из психологии отношений (Big Five, теория привязанности, исследования Дж. Готтмана и др.). Это не диагноз и не научный прогноз. Пророчество — метафора, а не приговор. Ответы не отправляются на сервер: всё считается в твоём браузере. Код-отпечаток зашифрован и содержит только сводные оценки, без отдельных ответов. Второй человек увидит пророчество пары. Быт, ритм, характер и то, как вы проявляете любовь, там названы прямо. Близость, верность, ссоры, страх потерять и прошлое — нет: они смешаны в одну сводную оценку «Испытание» вместе с ответами обоих и показаны только уровнем. Поэтому, даже зная свои ответы, нельзя вычислить, что ответил другой, и понять, какая тема на что повлияла.</p>
   `, 'result');
-  setTimeout(() => el.querySelectorAll('.tr i').forEach(i => (i.style.width = i.dataset.w + '%')), 400);
+  setTimeout(() => el.querySelectorAll('.tr i, .meter i').forEach(i => (i.style.width = i.dataset.w + '%')), 400);
   $('#cp', el).onclick = () => copy(link);
   $('#cmp', el).onclick = () => {
     const raw = $('#other', el).value.trim(); const m = raw.match(/with=([A-Za-z0-9_-]+)/); const code = m ? m[1] : raw;
@@ -397,6 +401,70 @@ async function showMine() {
   });
   $('#again', el).onclick = restart;
   const pb = $('#pair', el); if (pb) pb.onclick = showPair;
+}
+
+
+/* ---------- Блоки развёрнутых результатов ---------- */
+const plural = (n, f) => f[(n % 10 === 1 && n % 100 !== 11) ? 0 : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 1 : 2];
+const meter = v => `<div class="meter"><i data-w="${Math.round(v)}"></i></div>`;
+const sec = (title, inner, cls = '') => `<section class="sec glass ${cls}"><h4>${title}</h4>${inner}</section>`;
+
+function curveSvg(pts, band) {
+  const W = 320, H = 120, X = h => ((h - 6) / 18) * W, Y = v => H - 22 - v * (H - 34);
+  const d = pts.map(([h, v], i) => `${i ? 'L' : 'M'}${X(h).toFixed(1)},${Y(v).toFixed(1)}`).join('');
+  const ticks = [6, 9, 12, 15, 18, 21, 24].map(h => `<text x="${X(h)}" y="${H - 4}" text-anchor="${h === 6 ? 'start' : h === 24 ? 'end' : 'middle'}">${h === 24 ? '0' : h}:00</text>`).join('');
+  const b = band ? `<rect x="${X(band[0])}" y="6" width="${Math.max(2, X(band[1]) - X(band[0]))}" height="${H - 28}" rx="8" class="band"/>` : '';
+  return `<svg class="curve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${b}<path d="${d}L${W},${H - 22}L0,${H - 22}Z" class="area"/><path d="${d}" class="line"/>${ticks}</svg>`;
+}
+
+function heartSvg(h) {
+  const cx = 20 + h.x * 160, cy = 180 - h.y * 160;
+  return `<svg class="heartmap" viewBox="0 0 200 200">
+    <rect x="20" y="20" width="160" height="160" rx="14" class="frame"/>
+    <line x1="100" y1="20" x2="100" y2="180"/><line x1="20" y1="100" x2="180" y2="100"/>
+    <text x="60" y="64">Маяк</text><text x="140" y="64">Лабиринт</text><text x="60" y="144">Гавань</text><text x="140" y="144">Крепость</text>
+    <text x="100" y="196" class="ax">дистанция →</text><text x="8" y="100" class="ax" transform="rotate(-90 8 100)">тревога →</text>
+    <circle cx="${cx}" cy="${cy}" r="16" class="halo"/><circle cx="${cx}" cy="${cy}" r="7" class="dot"/></svg>`;
+}
+
+function deepMine(me) {
+  const d = deepPortrait(me);
+  const traits = d.traits.map(t => `<div class="trait">
+      <div class="th"><b>${t.name}</b><span>${t.sci}</span><em>${t.v}%</em></div>${meter(t.v)}
+      <p>${t.t}</p>${t.light ? `<p class="ls"><span>В свету:</span> ${t.light}</p><p class="ls sh"><span>В тени:</span> ${t.shadow}</p>` : ''}</div>`).join('');
+  const riders = d.rider.riders.map(r => `<div class="mini"><span>${r.name}</span>${meter(r.v)}<em>${r.v}%</em></div>`).join('');
+  return `
+    ${sec('Пять стихий характера', `<p class="cap">Пять черт, на которых держится психология личности (модель «Большой пятёрки»). Ни один полюс не лучше другого: у каждого есть свет и тень.</p>${traits}`)}
+    <div class="duo">
+      ${sec('Карта сердца', `${heartSvg(d.heart)}<div class="big-name">${d.heart.name}</div><p>${d.heart.d}</p><p class="nums">тревога ${d.heart.anx}% · дистанция ${d.heart.avo}%</p>`)}
+      ${sec('Твой всадник в ссоре', `<div class="big-name">${d.rider.name}</div><p>${d.rider.d}</p><p class="ls"><span>Противоядие:</span> ${d.rider.fix}</p>${riders}<div class="mini"><span>Умение мириться</span>${meter(d.rider.repair)}<em>${d.rider.repair}%</em></div>`)}
+    </div>
+    <div class="duo">
+      ${sec('Ритм дня', `${curveSvg(d.rhythm.pts)}<p>${d.rhythm.t}</p><p class="nums">пик около ${d.rhythm.peak}:00 · энергия ${d.rhythm.energy}%</p>`)}
+      ${sec('Темперамент', `<div class="big-name">${d.temper.name}</div>${meter(d.temper.v)}<p>${d.temper.d}</p><p class="nums">Это видишь только ты. В пророчество пары эти ответы попадают лишь смешанными с другими темами, так что второй человек не сможет их вычислить.</p>`)}
+    </div>
+    ${sec('Кто тебе подойдёт', `<div class="duo in"><div><b class="ok">С кем легко</b>${d.match.easy.map(t => `<p>${t}</p>`).join('')}</div><div><b class="no">С кем трудно</b>${d.match.hard.map(t => `<p>${t}</p>`).join('')}</div></div>`)}`;
+}
+
+function deepPair(P) {
+  const seasons = P.seasons.map(s => `<div class="season glass L${s.L}">
+      <div class="sg">${s.glyph}</div><div class="sn">${s.name}</div><div class="ss">${s.sub}</div>
+      ${s.k === 'trial' ? `<div class="sv steps">${[0, 1, 2].map(i => `<i class="${i <= s.L ? 'on' : ''}"></i>`).join('')}</div>` : `<div class="sv">${Math.round(s.v * 100)}%</div>`}
+      <div class="sl">${s.level}</div><p>${s.text}</p></div>`).join('');
+  const T = P.type, eA = ELEMENTS[T.a], eB = ELEMENTS[T.b];
+  const love = (from, to, l) => `<div class="lv"><div class="th"><b>${esc(from)} → ${esc(to)}</b><em>${l.pct}%</em></div>${meter(l.pct)}
+      <p>Лучше всего доходит: «${l.best}».${l.miss ? ` Меньше всего хватает: «${l.miss}».` : ''}</p></div>`;
+  const R = P.rhythm;
+  const word = m => (m >= 0.85 ? 'совпадаете' : m >= 0.5 ? 'близко' : m >= 0.2 ? 'по-разному' : 'расходитесь');
+  return `
+    <div class="seasons">${seasons}</div>
+    <p class="axes-cap">Весна — как вы попадаете друг в друга. Лето — деньги, дом, ритм, ценности. Осень — пять хрупких тем сразу: близость, доверие, ссоры, страх потерять, устойчивость. Она складывается из ответов обоих и не раскладывается обратно — ни по темам, ни по людям, поэтому показана только уровнем. Зима — итог всех сезонов.</p>
+    ${sec('Тип пары', `<div class="big-name">${T.t}</div><p class="nums">${esc(P.nA)} — ${eA.name} ${eA.glyph} · ${esc(P.nB)} — ${eB.name} ${eB.glyph}</p><p>${T.d}</p><p class="ls"><span>В свету:</span> ${T.light}</p><p class="ls sh"><span>В тени:</span> ${T.shadow}</p>`)}
+    ${sec('Как вы попадаете в чаши друг друга', `<p class="cap">Сколько из того, как один естественно проявляет любовь, ложится туда, где её ждёт другой.</p>${love(P.nA, P.nB, P.love.ab)}${love(P.nB, P.nA, P.love.ba)}`)}
+    <div class="duo">
+      ${sec('Ритм пары', `${curveSvg(R.both, [R.from, R.to])}<p>${R.gap >= 3 ? `Ваши пики энергии далеко друг от друга. Полностью «включены» вы оба примерно с ${R.from}:00 до ${R.to}:00 — берегите эти часы для важного.` : `Ваша общая энергия — примерно с ${R.from}:00 до ${R.to}:00. В эти часы вам легче всего говорить, решать и радоваться вместе.`}</p>`)}
+      ${sec('Линейка быта', P.habits.map(h => `<div class="mini"><span>${h.t}</span>${meter(h.m * 100)}<em>${word(h.m)}</em></div>`).join(''))}
+    </div>`;
 }
 
 // ---------- сканер QR прямо на сайте (без сервера) ----------
@@ -465,13 +533,6 @@ function restart() {
   begin();
 }
 
-function ring(v, label) {
-  const C = 2 * Math.PI * 42;
-  return `<div class="axis glass"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-opacity=".15" stroke-width="5"/>
-    <circle class="f" cx="50" cy="50" r="42" fill="none" stroke="var(--gold)" stroke-width="5" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-o="${C * (1 - v)}"/></svg>
-    <div class="v">${Math.round(v * 100)}</div><div class="t">${label}</div></div>`;
-}
-
 function omensBlock(list) {
   const line = o => `<div class="omen ${o.kind}"><i>${o.kind === 'lo' ? '◇' : '✦'}</i><span>${o.t}${o.do ? `<b class="do">${o.do}</b>` : ''}<small>${o.why}</small></span></div>`;
   const good = list.filter(o => o.kind !== 'lo'), grow = list.filter(o => o.kind === 'lo');
@@ -483,7 +544,6 @@ async function showPair() {
   const A = decodeProfile(state.myCode), B = decodeProfile(state.partnerCode);
   if (!A || !B) return toast('Не удалось прочитать отпечатки');
   const P = prophecy(A, B);
-  const x = P.axes;
   if (P.key === 'serpent' || P.key === 'storm') { setDark('hades'); await world.goTo('hades', { dur: 4 }); }
   else if (world.current !== 'oracle') { setDark('oracle'); await world.goTo('oracle'); }
   const stale = Math.abs(A.day - B.day) > 45;
@@ -492,26 +552,23 @@ async function showPair() {
     <div class="sigil">${P.fate.sigil}</div>
     <div class="fate-title">${P.fate.title}</div>
     <div class="verdict">${P.fate.verdict}</div>
+    <div class="counts"><span><b>${P.counts.hi}</b> ${plural(P.counts.hi, ['точка опоры', 'точки опоры', 'точек опоры'])}</span><span><b>${P.counts.lo}</b> ${plural(P.counts.lo, ['точка трения', 'точки трения', 'точек трения'])}</span><span><b>${P.winter}%</b> на седьмую зиму</span></div>
     <div class="paper glass prophecy">
       <p>Оракул не знает, кто вы друг другу сейчас: коллеги, бывшие, незнакомцы, супруги. Он видит, что случилось бы, если бы вы отбросили всё и шагнули друг к другу.</p>
       ${P.fate.body.map(b => `<p>${b}</p>`).join('')}
       <p><em>${P.children}</em></p>
     </div>
     <div class="why glass"><b>Откуда этот вывод</b><p>${P.fate.why}</p><p>${P.childrenWhy}</p></div>
-    <div class="axes">
-      ${ring(x.feel, 'Чувства')}${ring(x.everyday, 'Быт')}${ring(x.stability, 'Прочность')}${ring(x.fidelity, 'Верность')}${ring(x.family, 'Семья')}
-    </div>
-    <p class="axes-cap">Чувства — совпадение в любви и сексе. Быт — деньги, порядок, ритм, ценности. Прочность — конфликты, привязанность, эмоциональная устойчивость. Верность — взгляды на моногамию и сводный риск. Семья — дети, роли, вера.</p>
-    <div class="winter glass"><div class="n">${P.winter}%</div><p>Столько оракул даёт на то, что ваш союз переживёт седьмую зиму, если вы решитесь его начать.<small>Это не вероятность из исследования, а сводная оценка всех пяти осей с их весами.</small></p></div>
+    ${deepPair(P)}
     ${omensBlock(P.omens)}
     <p class="retake">${stale ? 'Ваши отпечатки сделаны с разницей больше месяца. Один из вас уже другой человек. Пройдите заново, оба.' : 'Пророчество отражает вас обоих сейчас. Перепройдите через месяц: если кто-то из вас изменится, изменится и судьба.'}</p>
     <div class="gap"></div>
     <div class="row"><button class="btn-ghost" id="back">← Мой портрет</button><button class="btn-ghost" id="again">Пройти заново</button></div>
-    <p class="disclaimer">Пророчество собрано из общих черт пары. Бытовые темы названы прямо, только «совпадаете» или «сильно расходитесь», без того, кто из вас какой. Чувствительные темы намеренно размыты. Тест не может и не пытается предсказывать будущее или конкретные события. Он опирается на исследования психологии отношений и статистику по парам, но это не диагноз и не приговор. Используйте его как повод поговорить.</p>
+    <p class="disclaimer">Пророчество собрано из общих черт пары. Быт, ритм, характер и то, как вы проявляете любовь, названы прямо. Острые темы — близость, верность, ссоры, страх потерять, прошлое — смешаны в одну оценку «Испытание» из ответов обоих и показаны только уровнем: по ней нельзя понять ни тему, ни то, что ответил другой. Тест не может и не пытается предсказывать будущее или конкретные события. Он опирается на исследования психологии отношений и статистику по парам, но это не диагноз и не приговор. Используйте его как повод поговорить.</p>
   `, 'result');
   const ps = [...el.querySelectorAll('.prophecy p')];
   ps.forEach((p, i) => setTimeout(() => p.classList.add('on'), 900 + i * 1500));
-  setTimeout(() => el.querySelectorAll('circle.f').forEach(c => (c.style.strokeDashoffset = c.dataset.o)), 600);
+  setTimeout(() => el.querySelectorAll('.meter i').forEach(i => (i.style.width = i.dataset.w + '%')), 600);
   $('#back', el).onclick = async () => { setDark('oracle'); await world.goTo('oracle'); showMine(); };
   $('#again', el).onclick = restart;
 }
