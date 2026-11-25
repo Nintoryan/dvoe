@@ -1,6 +1,6 @@
-import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=8';
-import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js?v=8';
-import { createWorld } from './scene.js?v=8';
+import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=9';
+import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js?v=9';
+import { createWorld } from './scene.js?v=9';
 
 const $ = (s, el = document) => el.querySelector(s);
 const ui = $('#ui');
@@ -341,7 +341,7 @@ async function showMine() {
   const pr = portrait(me, state.heart);
   const partner = state.partnerCode ? decodeProfile(state.partnerCode) : null;
   const link = linkFor(state.myCode);
-  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=8');
+  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=9');
   const el = await show(`
     <div class="kicker">${esc(me.name || 'Безымянный')} · отпечаток от ${fmtDay(me.day)}</div>
     <div class="gap-s"></div>
@@ -475,15 +475,17 @@ async function showPair() {
       ${P.fate.body.map(b => `<p>${b}</p>`).join('')}
       <p><em>${P.children}</em></p>
     </div>
+    <div class="why glass"><b>Откуда этот вывод</b><p>${P.fate.why}</p><p>${P.childrenWhy}</p></div>
     <div class="axes">
       ${ring(x.feel, 'Чувства')}${ring(x.everyday, 'Быт')}${ring(x.stability, 'Прочность')}${ring(x.fidelity, 'Верность')}${ring(x.family, 'Семья')}
     </div>
-    <div class="winter glass"><div class="n">${P.winter}%</div><p>Столько оракул даёт на то, что ваш союз переживёт седьмую зиму, если вы решитесь его начать.</p></div>
-    <div class="omens glass"><h4>Знамения</h4>${P.omens.map(o => `<div class="omen"><i>✦</i><span>${o}</span></div>`).join('')}</div>
+    <p class="axes-cap">Чувства — совпадение в любви и сексе. Быт — деньги, порядок, ритм, ценности. Прочность — конфликты, привязанность, эмоциональная устойчивость. Верность — взгляды на моногамию и сводный риск. Семья — дети, роли, вера.</p>
+    <div class="winter glass"><div class="n">${P.winter}%</div><p>Столько оракул даёт на то, что ваш союз переживёт седьмую зиму, если вы решитесь его начать.<small>Это не вероятность из исследования, а сводная оценка всех пяти осей с их весами.</small></p></div>
+    <div class="omens glass"><h4>Знамения</h4>${P.omens.map(o => `<div class="omen"><i>✦</i><span>${o.t}<small>${o.why}</small></span></div>`).join('')}</div>
     <p class="retake">${stale ? 'Ваши отпечатки сделаны с разницей больше месяца. Один из вас уже другой человек. Пройдите заново, оба.' : 'Пророчество отражает вас обоих сейчас. Перепройдите через месяц: если кто-то из вас изменится, изменится и судьба.'}</p>
     <div class="gap"></div>
     <div class="row"><button class="btn-ghost" id="back">← Мой портрет</button><button class="btn-ghost" id="again">Пройти заново</button></div>
-    <p class="disclaimer">Пророчество собрано из общих черт пары и намеренно размыто: оно не раскрывает ответы ни одного из вас. Это художественная интерпретация, а не научный или медицинский прогноз. Тест не может и не пытается предсказывать здоровье детей или конкретные события. Используйте его как повод поговорить, а не как приговор.</p>
+    <p class="disclaimer">Пророчество собрано из общих черт пары и намеренно размыто: оно не раскрывает ответы ни одного из вас. Тест не может и не пытается предсказывать будущее или конкретные события. Он опирается на исследования психологии отношений и статистику по парам, но это не диагноз и не приговор. Используйте его как повод поговорить.</p>
   `, 'result');
   const ps = [...el.querySelectorAll('.prophecy p')];
   ps.forEach((p, i) => setTimeout(() => p.classList.add('on'), 900 + i * 1500));

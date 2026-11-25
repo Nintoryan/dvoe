@@ -283,3 +283,9 @@ body.reading.dark #veil { background: radial-gradient(ellipse 70% 65% at 50% 50%
 .scan-tip { font-family: var(--serif); font-size: 20px; text-align: center; opacity: .9; }
 .scanner .scan-close { color: #fff; border-color: rgba(255,255,255,.5); }
 @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+.omen small, .winter small { display: block; margin-top: 6px; font-family: var(--sans); font-style: normal; font-size: 13px; line-height: 1.5; color: var(--ink-soft); opacity: .85; }
+.why { max-width: 860px; width: 100%; margin-top: 18px; padding: 24px 32px; text-align: left; font-size: 14px; line-height: 1.6; color: var(--ink-soft); }
+.why b { display: block; font-size: 11px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+.why p + p { margin-top: 8px; }
+.axes-cap { max-width: 860px; margin-top: 14px; font-size: 13px; line-height: 1.55; color: var(--ink-soft); }
