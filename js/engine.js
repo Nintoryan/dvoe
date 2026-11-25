@@ -1,5 +1,5 @@
 // Профиль, кодирование «отпечатка», совместимость и пророчество.
-import { CONTENT_VERSION, LOVE_ASPECTS, COMFORT_ASPECTS } from './content.js?v=6';
+import { CONTENT_VERSION, LOVE_ASPECTS, COMFORT_ASPECTS } from './content.js?v=7';
 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const avg = (...xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
@@ -61,17 +61,31 @@ export function buildProfile(ans, name = '') {
   };
 }
 
+// Что уходит другому человеку: только сводные оценки. Сырые «личные» ответы
+// (семья родителей, разбитое сердце, одиночество, измены) сюда не попадают.
+function groundOf(p) {
+  const origin = [1, 0.55, 0.5, 0.6, 0.6][p.origin] ?? 0.6;
+  const now = avg(p.mood, p.ready, 1 - p.lonely, [1, 0.85, 0.45, 0.9, 0.5][p.heart] ?? 0.7);
+  return clamp((0.05 * origin + 0.08 * now) / 0.13);
+}
+
 /* ---------------- Кодек отпечатка ---------------- */
 // Каждое поле упаковано в 4 бита. Поля 0..1 квантуются в 0..15.
 
+const CODEC = 2; // v2: только сводные поля + шифровка байтов
 const FIELDS = [
   ['E', 'f'], ['A', 'f'], ['C', 'f'], ['N', 'f'], ['O', 'f'], ['anx', 'f'], ['avo', 'f'],
   ['rec', 'a5'], ['giv', 'a5'], ['com', 'a5'], ['habits', 'a12'],
-  ['kids', 'i'], ['chrono', 'i'], ['energy', 'f'], ['touch', 'i'], ['sleepT', 'i'], ['health', 'i'], ['smell', 'i'],
-  ['origin', 'i'], ['prior', 'i'], ['crit', 'f'], ['contempt', 'f'], ['defend', 'f'], ['stone', 'f'], ['repair', 'f'],
-  ['sfreq', 'i'], ['simp', 'f'], ['snov', 'f'], ['stalk', 'f'], ['soi', 'f'], ['mono', 'i'], ['init', 'i'], ['control', 'f'],
-  ['fidRisk', 'f'], ['forgive', 'i'], ['mood', 'f'], ['lonely', 'f'], ['heart', 'i'], ['ready', 'f'], ['risk', 'i'],
+  ['kids', 'i'], ['chrono', 'i'], ['energy', 'f'], ['touch', 'i'], ['sleepT', 'i'],
+  ['ground', 'f'], ['crit', 'f'], ['contempt', 'f'], ['defend', 'f'], ['stone', 'f'], ['repair', 'f'],
+  ['sfreq', 'i'], ['simp', 'f'], ['snov', 'f'], ['stalk', 'f'], ['soi', 'f'], ['mono', 'i'], ['init', 'i'],
+  ['fidRisk', 'f'],
 ];
+// Байты перемешиваются псевдослучайным потоком: код нельзя прочитать «на глаз»
+function scramble(bytes, salt) {
+  let x = (0x9e3779b9 ^ Math.imul(salt + 1, 0x85ebca6b)) >>> 0;
+  return bytes.map(b => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return b ^ (x & 255); });
+}
 
 function b64url(bytes) {
   let s = '';
@@ -84,6 +98,7 @@ function unb64url(str) {
 }
 
 export function encodeProfile(p) {
+  p = { ...p, ground: p.ground ?? groundOf(p) };
   const nib = [];
   for (const [k, t] of FIELDS) {
     if (t === 'f') nib.push(Math.round(clamp(p[k]) * 15));
@@ -92,21 +107,26 @@ export function encodeProfile(p) {
   }
   if (nib.length % 2) nib.push(0);
   const nameBytes = new TextEncoder().encode(p.name || '').slice(0, 40);
-  const out = [p.v & 255, (p.day >> 8) & 255, p.day & 255, nameBytes.length, ...nameBytes];
-  for (let i = 0; i < nib.length; i += 2) out.push((nib[i] << 4) | nib[i + 1]);
-  return b64url(out);
+  const body = [(p.day >> 8) & 255, p.day & 255, nameBytes.length, ...nameBytes];
+  for (let i = 0; i < nib.length; i += 2) body.push((nib[i] << 4) | nib[i + 1]);
+  const salt = Math.floor(Math.random() * 256);
+  const sum = body.reduce((a, b) => (a * 31 + b) & 255, 7);
+  return b64url([CODEC, salt, ...scramble([...body, sum], salt)]);
 }
 
 export function decodeProfile(code) {
   try {
-    const b = unb64url(code.trim());
-    if (b[0] !== CONTENT_VERSION) return null;
-    const day = (b[1] << 8) | b[2];
-    const nl = b[3];
-    const name = new TextDecoder().decode(b.slice(4, 4 + nl));
+    const raw = unb64url(code.trim());
+    if (raw[0] !== CODEC || raw.length < 6) return null;
+    const all = scramble([...raw.slice(2)], raw[1]);
+    const b = all.slice(0, -1);
+    if (b.reduce((a, x) => (a * 31 + x) & 255, 7) !== all[all.length - 1]) return null;
+    const day = (b[0] << 8) | b[1];
+    const nl = b[2];
+    const name = new TextDecoder().decode(new Uint8Array(b.slice(3, 3 + nl)));
     const nib = [];
-    for (let i = 4 + nl; i < b.length; i++) nib.push(b[i] >> 4, b[i] & 15);
-    const p = { v: b[0], day, name };
+    for (let i = 3 + nl; i < b.length; i++) nib.push(b[i] >> 4, b[i] & 15);
+    const p = { v: CODEC, day, name };
     let j = 0;
     for (const [k, t] of FIELDS) {
       if (t === 'f') p[k] = nib[j++] / 15;
@@ -152,7 +172,7 @@ const HEART_NOW = [
 
 const top = arr => arr.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]);
 
-export function portrait(p) {
+export function portrait(p, heart) {
   const r = top(p.rec), g = top(p.giv), c = top(p.com);
   const style = attachStyle(p);
   const mismatch = p.rec.reduce((s, v, i) => s + Math.abs(v - p.giv[i]), 0) / 20; // 0..1
@@ -170,7 +190,7 @@ export function portrait(p) {
     attach: ATTACH[style].t,
     style,
     lines,
-    now: HEART_NOW[p.heart] || HEART_NOW[0],
+    now: heart == null ? '' : (HEART_NOW[heart] || HEART_NOW[0]),
     extreme: r[0][0] >= 8 ? LOVE_ASPECTS[r[0][1]].t : null,
   };
 }
@@ -218,13 +238,11 @@ export function compatibility(A, B) {
   const sA = attachStyle(A), sB = attachStyle(B);
   const trap = (sA === 'anxious' && (sB === 'avoidant' || sB === 'fearful')) ||
                (sB === 'anxious' && (sA === 'avoidant' || sA === 'fearful'));
-  const origin = q => [1, 0.55, 0.5, 0.6, 0.6][q.origin] ?? 0.6;
-  const nowState = q => avg(q.mood, q.ready, 1 - q.lonely, [1, 0.85, 0.45, 0.9, 0.5][q.heart] ?? 0.7);
   const stability = clamp(
     0.24 * (1 - avg(A.N, B.N)) - 0.08 * Math.max(A.N, B.N) + 0.08 +
     0.2 * (1 - Math.max(toxic(A), toxic(B))) + 0.13 * avg(A.repair, B.repair) +
     0.14 * avg(security(A), security(B)) + 0.1 * avg(A.A, B.A) +
-    0.05 * avg(origin(A), origin(B)) + 0.08 * avg(nowState(A), nowState(B)) -
+    0.13 * avg(A.ground, B.ground) -
     (trap ? 0.12 : 0) - (A.habits[10] !== B.habits[10] ? 0.03 : 0)
   );
 
@@ -338,73 +356,122 @@ const FATES = {
   },
 };
 
-function chooseFate(c) {
-  const x = c.axes;
+
+// Знамения строятся только из сводных осей пары, без имён и без отдельных ответов.
+// Каждая ось — смесь десятков ответов обоих, плюс «туман» (сид от пары кодов),
+// поэтому по пророчеству нельзя понять, кто из двоих что ответил.
+const OMENS = {
+  feel: {
+    hi: [
+      'Ваши тела будут понимать друг друга без перевода. Многие пары отдали бы за это годы.',
+      'Вы умеете отдавать именно то, чего ждёт другой. Это почти не встречается. Не принимайте это за данность.',
+      'Между вами будет то, что не объяснить словами: узнавание с первого прикосновения.',
+    ],
+    lo: [
+      'В спальне будет звучать немой вопрос, на который никто не решится ответить вслух. Этот разлом не виден днём.',
+      'Однажды прозвучит фраза «я же всё для тебя делаю». Она будет правдой и ничего не изменит.',
+      'Вы будете говорить о любви на разных языках и долго думать, что вас не слышат.',
+    ],
+  },
+  everyday: {
+    hi: [
+      'Вы одинаково понимаете, что такое хорошая жизнь. Вам не придётся тащить друг друга в чужую мечту.',
+      'Ваши дни будут складываться сами, как будто вы давно живёте вместе.',
+    ],
+    lo: [
+      'Вас будут разъедать не измены, а мелочи: деньги, посуда, выходные, «почему опять так». Великую любовь чаще убивают чашки, чем соперники.',
+      'Один будет звать в люди, другой — в тишину. Найдите комнату, где слышно обоих.',
+      'Вы будете встречаться на кухне в разное время, как соседи, которые нравятся друг другу.',
+    ],
+  },
+  stability: {
+    hi: [
+      'Вам не придётся каждый день доказывать друг другу, что вы не уйдёте. Это и есть покой, который многие ищут всю жизнь.',
+      'Ваши ссоры будут заканчиваться раньше, чем остынет чай.',
+    ],
+    lo: [
+      'Самый опасный гость в вашем доме — презрение. Сначала оно приходит шуткой, потом взглядом. Если оно поселится, само не уйдёт.',
+      'В вашем доме будет много дверей, которыми хлопают. Научитесь закрывать их тихо.',
+      'Каждый из вас принесёт в этот союз старую тень. Либо вы построите то, чего у вас не было, либо повторите то, что было.',
+    ],
+  },
+  fidelity: {
+    hi: [
+      'Ваша верность не будет стоить вам усилий. Это редкий дар, а не правило.',
+      'Третьему здесь не найдётся места: дверь закрыта не на замок, а на желание.',
+    ],
+    lo: [
+      'Тень третьего ляжет на порог. Не обязательно тело: может быть, тайна, переписка, взгляд.',
+      'Вы по-разному понимаете слово «верность». Договоритесь об этом словами, иначе договариваться будут поступки.',
+    ],
+  },
+  family: {
+    hi: ['Вы видите один и тот же дом, когда закрываете глаза. Это больше, чем кажется.'],
+    lo: ['Однажды вы поймёте, что мечтали о разных домах. Не откладывайте этот разговор на потом.'],
+  },
+};
+const MIST = [
+  'Если один протянет руку, другой не отдёрнет свою. Но кто-то должен первым отпустить берег.',
+  'Оракул видит вас обоих сквозь то, что с вами происходит сейчас. Через время узор может стать другим.',
+  'Самое важное между вами случится не в праздник, а в обычный вторник.',
+  'Вы узнаете друг о друге больше в первой поездке, чем за первый год.',
+];
+
+function chooseFate(c, x) {
   const minAx = Math.min(x.feel, x.everyday, x.stability, x.fidelity);
-  if (c.overall > 0.66 && minAx > 0.5) return 'union';
+  const overall = c.overallF;
+  if (overall > 0.66 && minAx > 0.5) return 'union';
   if (x.fidelity < 0.36) return 'serpent';
-  if (c.trap) return 'chase';
+  if (c.trap && x.stability < 0.62) return 'chase';
   if (c.asym > 0.22) return 'moon';
   if (x.stability < 0.38 && x.feel > 0.5) return 'storm';
   if (x.feel > 0.6 && x.everyday < 0.5) return 'fire';
   if (x.feel < 0.48 && x.everyday > 0.6) return 'harbor';
-  if (c.overall < 0.42) return 'shores';
+  if (overall < 0.42) return 'shores';
   if (x.stability < 0.36) return 'storm';
   return 'bridge';
 }
 
 export function prophecy(A, B, codeA, codeB) {
   const c = compatibility(A, B);
-  const key = chooseFate(c);
-  const fate = FATES[key];
-  const seed = hashStr([codeA, codeB].sort().join('|'));
+  // сид не зависит от соли в коде, только от содержимого — одинаков у обоих
+  const seed = hashStr([A, B].map(p => JSON.stringify({ ...p, v: 0 })).sort().join('|'));
   const r = rng(seed);
+  // туман: каждая ось сдвигается на ±0.07, наружу — только огрублённые значения
+  const x = {};
+  for (const k of Object.keys(c.axes)) x[k] = clamp(c.axes[k] + (r() - 0.5) * 0.14, 0.03, 0.97);
+  c.overallF = clamp(0.27 * x.feel + 0.22 * x.everyday + 0.25 * x.stability + 0.16 * x.fidelity + 0.1 * x.family);
+  const key = chooseFate(c, x);
+  const fate = FATES[key];
   const nA = A.name || 'Первый', nB = B.name || 'Второй';
-  const omens = [];
-  const add = (w, t) => omens.push({ w, t });
 
-  // любовь: кто кого слышит
-  if (c.asym > 0.15) {
-    const giverWeak = c.coverAB < c.coverBA ? [nA, nB] : [nB, nA];
-    add(0.9 + c.asym, `${giverWeak[0]} будет любить так, как умеет, а ${giverWeak[1]} — ждать любви, которую не умеют дать. Однажды прозвучит фраза «я же всё для тебя делаю». Она будет правдой и ничего не изменит.`);
+  const cand = [];
+  for (const k of Object.keys(OMENS)) {
+    const d = x[k] - 0.5;
+    if (Math.abs(d) < 0.08) continue;
+    const pool = d > 0 ? OMENS[k].hi : OMENS[k].lo;
+    cand.push({ w: Math.abs(d) + r() * 0.15, t: pick(r, pool) });
   }
-  if (c.loveAvg > 0.72) add(0.8, 'Вы оба умеете отдавать именно то, чего ждёт другой. Это почти не встречается. Не принимайте это за данность.');
-  if (c.sexGap >= 3) add(0.7 + c.sexGap / 10, 'В спальне будет звучать один и тот же немой вопрос. Один будет хотеть, другой — уставать от того, что его хотят. Этот разлом не виден днём.');
-  else if (c.sexGap <= 1 && avg(A.simp, B.simp) > 0.55) add(0.6, 'Ваши тела будут понимать друг друга без перевода. Многие пары отдали бы за это годы.');
-  if (c.maxRisk > 0.5) add(0.6 + c.maxRisk, 'Тень третьего ляжет на порог. Не обязательно тело: может быть, тайна, переписка, взгляд. Черта, которую один считал священной, для другого окажется пунктиром.');
-  if (c.monoGap >= 0.66) add(0.75, 'Вы по-разному понимаете слово «верность». Договоритесь об этом словами, иначе договариваться будут поступки.');
-  if (c.habitAgree < 0.5) add(0.65 + (0.5 - c.habitAgree), 'Вас будут разъедать не измены, а мелочи: деньги, посуда, выходные, «почему опять так». Великую любовь чаще убивают чашки, чем соперники.');
-  if (c.comfortSim > 0.8) add(0.55, 'Вы одинаково понимаете, что такое хорошая жизнь. Вам не придётся тащить друг друга в чужую мечту.');
-  if (Math.max(c.toxicA, c.toxicB) > 0.5) add(0.7 + Math.max(c.toxicA, c.toxicB) / 2, 'Самый опасный гость в вашем доме — презрение. Сначала оно приходит шуткой, потом взглядом. Если оно поселится, само не уйдёт.');
-  if (c.trap) add(0.85, 'Один будет догонять, другой — убегать, и вы оба назовёте это страстью.');
-  if (c.sA === 'secure' && c.sB === 'secure') add(0.6, 'Вам не придётся каждый день доказывать друг другу, что вы не уйдёте. Это и есть покой, который многие ищут всю жизнь.');
-  if (A.chrono !== B.chrono) add(0.35, 'Вы будете встречаться на кухне на рассвете: один ещё не ложился, другой уже проснулся.');
-  if (A.origin >= 2 && B.origin >= 2) add(0.45, 'Вы оба несёте в себе разрушенный дом родителей. Либо вы построите тот, которого у вас не было, либо повторите тот, который был.');
-  if (A.heart === 2 || B.heart === 2) add(0.55, 'Сейчас один из вас ещё смотрит назад, на того, кто был раньше. Оракул видит вас сквозь этот шрам. Через время узор может стать другим.');
-  if (A.risk && B.risk) add(0.5, 'Вы оба готовы прыгнуть. Если один протянет руку, другой не отдёрнет свою.');
-  else if (!A.risk && !B.risk) add(0.4, 'Вы оба держитесь за берег. Чтобы что-то случилось, кому-то придётся первым отпустить его.');
-  if (Math.abs(A.E - B.E) > 0.5) add(0.4, 'Один будет звать в люди, другой — в тишину. Найдите комнату, где слышно обоих.');
+  cand.sort((a, b) => b.w - a.w);
+  const chosen = cand.slice(0, 3).map(o => o.t);
+  while (chosen.length < 4) { const t = pick(r, MIST); if (!chosen.includes(t)) chosen.push(t); }
+  for (let i = chosen.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [chosen[i], chosen[j]] = [chosen[j], chosen[i]]; }
 
-  omens.sort((a, b) => b.w - a.w);
-  const chosen = omens.slice(0, 5).map(o => o.t);
-
-  // о детях — только атмосфера семьи, без «медицинских» предсказаний
+  // о детях — только по сводной оси «семья», без указания, кто чего хочет
   let children;
-  const bothNo = A.kids >= 3 && B.kids >= 3;
-  if (c.kidsBreaker) children = 'Настанет день, когда один из вас заговорит о ребёнке, а другой отведёт глаза. Это развилка, которую нельзя обойти, — её можно только честно пройти. Не надейтесь, что «потом передумает».';
-  else if (bothNo) children = 'Ваш союз не ищет продолжения в детях. Вы будете друг для друга всем миром: это свобода и это вес.';
-  else if (c.axes.stability > 0.62) children = pick(r, [
+  if (x.family < 0.4) children = 'Настанет день, когда вы заговорите о будущем и увидите разные картины. Это развилка, которую нельзя обойти, её можно только честно пройти.';
+  else if (x.stability > 0.62) children = pick(r, [
     'Если придут дети, им достанется ваш покой. Они вырастут, зная, что любовь — это безопасно.',
-    'Оракул слышит в вашем доме детский смех. Они будут учиться любви, глядя на вас, и научатся хорошему.']);
-  else if (c.axes.stability < 0.45) children = pick(r, [
-    'Если придут дети, им достанется ваша буря. Они будут учиться любви по вашим ссорам, и выучат её именно такой. Сначала научитесь мириться — потом зовите их.',
-    'Дети не склеят то, что трещит. Если вы позовёте их, чтобы спасти союз, им придётся нести то, что не смогли нести вы.']);
+    'Оракул слышит в вашем доме смех. Те, кто будет учиться любви, глядя на вас, научатся хорошему.']);
+  else if (x.stability < 0.45) children = pick(r, [
+    'Если придут дети, им достанется ваша буря. Сначала научитесь мириться, потом зовите их.',
+    'Дети не склеят то, что трещит. Если позвать их, чтобы спасти союз, им придётся нести то, что не смогли нести вы.']);
   else children = 'Дети возможны, но не они решат вашу судьбу. Ребёнок станет зеркалом: всё, что между вами недоговорено, отразится в нём громче.';
 
-  // «седьмая зима» — мистическая вероятность
-  const winter = Math.round(clamp(c.overall * 1.15 - 0.08 + (r() - 0.5) * 0.06, 0.04, 0.96) * 100);
-
-  return { key, fate, c, omens: chosen, children, winter, nA, nB };
+  const winter = Math.round(clamp(c.overallF * 1.15 - 0.08, 0.04, 0.96) * 100);
+  // наружу — только туманные оси, округлённые до 5
+  const axes = {}; for (const k in x) axes[k] = Math.round(x[k] * 20) / 20;
+  return { key, fate, axes, omens: chosen, children, winter, nA, nB };
 }
 
 export { clamp };

@@ -1,6 +1,6 @@
-import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=6';
-import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js?v=6';
-import { createWorld } from './scene.js?v=6';
+import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=7';
+import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js?v=7';
+import { createWorld } from './scene.js?v=7';
 
 const $ = (s, el = document) => el.querySelector(s);
 const ui = $('#ui');
@@ -79,7 +79,7 @@ function landing() {
     $('#start', el).onclick = begin;
     const us = $('#use-saved', el);
     if (us) us.onclick = async () => {
-      state.myCode = saved.code; state.name = savedP.name;
+      state.myCode = saved.code; state.name = savedP.name; state.heart = saved.heart;
       hud.classList.add('hidden');
       await travel('oracle');
       if (partner) showPair(); else showMine();
@@ -319,7 +319,8 @@ async function finish() {
   await show(`<div class="oracle-wait"><span>Оракул смотрит в тебя</span></div><div class="gap"></div><p class="lead">Не закрывай глаза.</p>`);
   const p = buildProfile(state.answers, state.name);
   state.myCode = encodeProfile(p);
-  store.set('dvoe.me', { code: state.myCode, at: Date.now() });
+  state.heart = p.heart;
+  store.set('dvoe.me', { code: state.myCode, heart: p.heart, at: Date.now() }); // сердце остаётся только на этом устройстве
   await Promise.all([travel('oracle'), sleep(2600)]);
   showMine();
 }
@@ -337,16 +338,16 @@ function bars(title, aspects, vals) {
 
 async function showMine() {
   const me = decodeProfile(state.myCode);
-  const pr = portrait(me);
+  const pr = portrait(me, state.heart);
   const partner = state.partnerCode ? decodeProfile(state.partnerCode) : null;
   const link = linkFor(state.myCode);
-  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=6');
+  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=7');
   const el = await show(`
     <div class="kicker">${esc(me.name || 'Безымянный')} · отпечаток от ${fmtDay(me.day)}</div>
     <div class="gap-s"></div>
     <div class="arch-name">${pr.noun}</div>
     <div class="arch-sub">${pr.attach}</div>
-    <div class="paper glass">${pr.lines.map(l => `<p>${l}</p>`).join('')}<p><em>${pr.now}</em></p></div>
+    <div class="paper glass">${pr.lines.map(l => `<p>${l}</p>`).join('')}${pr.now ? `<p><em>${pr.now}</em></p>` : ''}</div>
     <div class="bars">
       ${bars('Чтобы чувствовать любовь', LOVE_ASPECTS, me.rec)}
       ${bars('Как ты любишь', LOVE_ASPECTS, me.giv)}
@@ -366,7 +367,7 @@ async function showMine() {
     <p class="retake">Этот отпечаток — снимок сегодняшнего тебя. Эмоции, одиночество, влюблённость, свежие раны меняют его. Возвращайся через месяц или после того, что тебя изменило.</p>
     <div class="gap"></div>
     <div class="row"><button class="btn-ghost" id="again">Пройти заново</button></div>
-    <p class="disclaimer">«ДВОЕ» — рефлексивный тест, основанный на идеях из психологии отношений (Big Five, теория привязанности, исследования Дж. Готтмана и др.). Это не диагноз и не научный прогноз. Пророчество — метафора, а не приговор. Ответы не отправляются на сервер: всё считается в твоём браузере, а код содержит только итоговые оценки.</p>
+    <p class="disclaimer">«ДВОЕ» — рефлексивный тест, основанный на идеях из психологии отношений (Big Five, теория привязанности, исследования Дж. Готтмана и др.). Это не диагноз и не научный прогноз. Пророчество — метафора, а не приговор. Ответы не отправляются на сервер: всё считается в твоём браузере. Код-отпечаток зашифрован и содержит только сводные оценки, без отдельных ответов. Второй человек увидит лишь общее пророчество пары, размытое туманом: по нему нельзя понять, кто из вас что ответил.</p>
   `, 'result');
   setTimeout(() => el.querySelectorAll('.tr i').forEach(i => (i.style.width = i.dataset.w + '%')), 400);
   $('#cp', el).onclick = () => copy(link);
@@ -460,8 +461,7 @@ async function showPair() {
   const A = decodeProfile(state.myCode), B = decodeProfile(state.partnerCode);
   if (!A || !B) return toast('Не удалось прочитать отпечатки');
   const P = prophecy(A, B, state.myCode, state.partnerCode);
-  const { LOVE_ASPECTS } = await import('./content.js?v=6');
-  const x = P.c.axes;
+  const x = P.axes;
   if (P.key === 'serpent' || P.key === 'storm') { setDark('hades'); await world.goTo('hades', { dur: 4 }); }
   else if (world.current !== 'oracle') { setDark('oracle'); await world.goTo('oracle'); }
   const stale = Math.abs(A.day - B.day) > 45;
@@ -480,20 +480,10 @@ async function showPair() {
     </div>
     <div class="winter glass"><div class="n">${P.winter}%</div><p>Столько оракул даёт на то, что ваш союз переживёт седьмую зиму, если вы решитесь его начать.</p></div>
     <div class="omens glass"><h4>Знамения</h4>${P.omens.map(o => `<div class="omen"><i>✦</i><span>${o}</span></div>`).join('')}</div>
-    <div class="lovemap glass">
-      <h4>Карта любви</h4>
-      <p class="cap">Любить и чувствовать себя любимым — разные вещи. Золото — то, что человек естественно отдаёт. Контур — то, в чём нуждается другой.</p>
-      <div class="lm-head"><span>${esc(P.nA)} → ${esc(P.nB)}</span><span></span><span>${esc(P.nB)} → ${esc(P.nA)}</span></div>
-      ${LOVE_ASPECTS.map((a, i) => `<div class="lm-row">
-        <div class="l"><i style="width:${A.giv[i] * 10}%"></i><b style="width:${B.rec[i] * 10}%"></b></div>
-        <div class="c">${a.t}</div>
-        <div class="r"><i style="width:${B.giv[i] * 10}%"></i><b style="width:${A.rec[i] * 10}%"></b></div></div>`).join('')}
-      <p class="legend">${esc(P.nA)} попадает в потребности ${esc(P.nB)} на ${Math.round(P.c.coverAB * 100)}%. ${esc(P.nB)} попадает в потребности ${esc(P.nA)} на ${Math.round(P.c.coverBA * 100)}%.</p>
-    </div>
     <p class="retake">${stale ? 'Ваши отпечатки сделаны с разницей больше месяца. Один из вас уже другой человек. Пройдите заново, оба.' : 'Пророчество отражает вас обоих сейчас. Перепройдите через месяц: если кто-то из вас изменится, изменится и судьба.'}</p>
     <div class="gap"></div>
     <div class="row"><button class="btn-ghost" id="back">← Мой портрет</button><button class="btn-ghost" id="again">Пройти заново</button></div>
-    <p class="disclaimer">Пророчество — художественная интерпретация ваших ответов, а не научный или медицинский прогноз. Тест не может и не пытается предсказывать здоровье детей или конкретные события. Используйте его как повод поговорить, а не как приговор.</p>
+    <p class="disclaimer">Пророчество собрано из общих черт пары и намеренно размыто: оно не раскрывает ответы ни одного из вас. Это художественная интерпретация, а не научный или медицинский прогноз. Тест не может и не пытается предсказывать здоровье детей или конкретные события. Используйте его как повод поговорить, а не как приговор.</p>
   `, 'result');
   const ps = [...el.querySelectorAll('.prophecy p')];
   ps.forEach((p, i) => setTimeout(() => p.classList.add('on'), 900 + i * 1500));
