@@ -1,6 +1,6 @@
 import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=11';
-import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, ELEMENTS } from './engine.js?v=11';
-import { deepPortrait } from './reading.js?v=11';
+import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, ELEMENTS } from './engine.js?v=12';
+import { deepPortrait } from './reading.js?v=12';
 import { createWorld } from './scene.js?v=10';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -19,6 +19,7 @@ const store = {
 const state = {
   answers: {}, name: '', idx: 0,
   partnerCode: null, myCode: null,
+  me: null, // полный профиль: только на этом устройстве, в код не попадает
 };
 const OLD_CODE = 'Этот отпечаток сделан в прошлой версии теста. Вопросы с тех пор изменились, поэтому сравнить их нельзя. Попроси человека пройти тест заново.';
 function readHash() {
@@ -71,7 +72,7 @@ function landing() {
   hud.classList.add('hidden');
   const partner = state.partnerCode ? decodeProfile(state.partnerCode) : null;
   const saved = store.get('dvoe.me');
-  const savedP = saved && decodeProfile(saved.code);
+  const savedP = saved?.full && decodeProfile(saved.code);
   const kicker = partner ? `${esc(partner.name || 'Кто-то')} зовёт тебя к Оракулу` : 'Оракул совместимости';
   const sub = partner ? 'Пройди свой путь. Потом оракул покажет, что было бы с вами двумя.' : 'Тест, которого ещё не видел свет';
   let extra = '';
@@ -82,7 +83,7 @@ function landing() {
     $('#start', el).onclick = begin;
     const us = $('#use-saved', el);
     if (us) us.onclick = async () => {
-      state.myCode = saved.code; state.name = savedP.name; state.heart = saved.heart;
+      state.myCode = saved.code; state.me = saved.full; state.name = savedP.name; state.heart = saved.heart;
       hud.classList.add('hidden');
       await travel('oracle');
       if (partner) showPair(); else showMine();
@@ -334,8 +335,10 @@ async function finish() {
   await show(`<div class="oracle-wait"><span>Оракул смотрит в тебя</span></div><div class="gap"></div><p class="lead">Не закрывай глаза.</p>`);
   const p = buildProfile(state.answers, state.name);
   state.myCode = encodeProfile(p);
+  state.me = p;
   state.heart = p.heart;
-  store.set('dvoe.me', { code: state.myCode, heart: p.heart, at: Date.now() }); // сердце остаётся только на этом устройстве
+  // полный профиль (острые темы, сердце) остаётся только на этом устройстве; наружу уходит лишь код
+  store.set('dvoe.me', { code: state.myCode, full: p, heart: p.heart, at: Date.now() });
   await Promise.all([travel('oracle'), sleep(2600)]);
   showMine();
 }
@@ -352,7 +355,8 @@ function bars(title, aspects, vals) {
 }
 
 async function showMine() {
-  const me = decodeProfile(state.myCode);
+  const me = state.me;
+  if (!me) return restart();
   const pr = portrait(me, state.heart);
   const partner = state.partnerCode ? decodeProfile(state.partnerCode) : null;
   const link = linkFor(state.myCode);
@@ -385,7 +389,7 @@ async function showMine() {
     <p class="retake">Этот отпечаток — снимок сегодняшнего тебя. Эмоции, одиночество, влюблённость, свежие раны меняют его. Возвращайся через месяц или после того, что тебя изменило.</p>
     <div class="gap"></div>
     <div class="row"><button class="btn-ghost" id="again">Пройти заново</button></div>
-    <p class="disclaimer">«ДВОЕ» — рефлексивный тест, основанный на идеях из психологии отношений (Big Five, теория привязанности, исследования Дж. Готтмана и др.). Это не диагноз и не научный прогноз. Пророчество — метафора, а не приговор. Ответы не отправляются на сервер: всё считается в твоём браузере. Код-отпечаток зашифрован и содержит только сводные оценки, без отдельных ответов. Второй человек увидит пророчество пары. Быт, ритм, характер и то, как вы проявляете любовь, там названы прямо. Близость, верность, ссоры, страх потерять и прошлое — нет: они смешаны в одну сводную оценку «Испытание» вместе с ответами обоих и показаны только уровнем. Поэтому, даже зная свои ответы, нельзя вычислить, что ответил другой, и понять, какая тема на что повлияла.</p>
+    <p class="disclaimer">«ДВОЕ» — рефлексивный тест, основанный на идеях из психологии отношений (Big Five, теория привязанности, исследования Дж. Готтмана и др.). Это не диагноз и не научный прогноз. Пророчество — метафора, а не приговор. Ответы не отправляются на сервер: всё считается в твоём браузере. Код-отпечаток содержит только то, что и так видно в пророчестве пары (характер, чаши любви, быт, ритм), и одно грубое число из смеси острых тем. Отдельных ответов о близости, верности, ссорах и прошлом в нём нет: твой полный портрет хранится только на этом устройстве. Второй человек увидит пророчество пары. Быт, ритм, характер и то, как вы проявляете любовь, там названы прямо. Близость, верность, ссоры, страх потерять и прошлое — нет: они смешаны в одну сводную оценку «Испытание» вместе с ответами обоих и показаны только уровнем. Поэтому, даже зная свои ответы, нельзя вычислить, что ответил другой, и понять, какая тема на что повлияла.</p>
   `, 'result');
   setTimeout(() => el.querySelectorAll('.tr i, .meter i').forEach(i => (i.style.width = i.dataset.w + '%')), 400);
   $('#cp', el).onclick = () => copy(link);
@@ -528,7 +532,7 @@ function copy(text) {
 }
 
 function restart() {
-  state.answers = {}; state.idx = 0; state.myCode = null;
+  state.answers = {}; state.idx = 0; state.myCode = null; state.me = null;
   history.replaceState(null, '', location.pathname + (state.partnerCode ? `#with=${state.partnerCode}` : ''));
   begin();
 }
@@ -588,7 +592,7 @@ function randomAnswers() {
 }
 async function demo() {
   const me = buildProfile(randomAnswers(), 'Ты');
-  state.myCode = encodeProfile(me); state.heart = me.heart;
+  state.myCode = encodeProfile(me); state.me = me; state.heart = me.heart;
   state.partnerCode = encodeProfile(buildProfile(randomAnswers(), 'Демо'));
   hud.classList.add('hidden');
   await travel('oracle');

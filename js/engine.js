@@ -75,15 +75,29 @@ function groundOf(p) {
 /* ---------------- Кодек отпечатка ---------------- */
 // Каждое поле упаковано в 4 бита. Поля 0..1 квантуются в 0..15.
 
-const CODEC = 3; // v3: шкалы 0..4 вместо «или-или»; v2 — старые коды, несовместимы
+const CODEC = 4; // v4: острые темы в коде только одной грубой смесью; v3 и раньше — несовместимы
+/* Приватность кода. Репозиторий публичный, поэтому код считается ОТКРЫТЫМ: любой может его
+   расшифровать. В нём только то, что и так видно в пророчестве пары (характер без тревожности,
+   чаши любви, быт, ритм, дети), и одно число «тень» — смесь пяти острых тем (близость, верность,
+   ссоры, привязанность, тревожность) огрублённая до 6 уровней. Отдельных острых ответов и оценок
+   в коде нет вообще: полный профиль хранится только на устройстве самого человека. */
 const FIELDS = [
-  ['E', 'f'], ['A', 'f'], ['C', 'f'], ['N', 'f'], ['O', 'f'], ['anx', 'f'], ['avo', 'f'],
+  ['E', 'f'], ['A', 'f'], ['C', 'f'], ['O', 'f'],
   ['rec', 'a5'], ['giv', 'a5'], ['com', 'a5'], ['habits', 'a12'],
   ['kids', 'i'], ['chrono', 'i'], ['energy', 'f'], ['touch', 'i'], ['sleepT', 'i'],
-  ['ground', 'f'], ['crit', 'f'], ['contempt', 'f'], ['defend', 'f'], ['stone', 'f'], ['repair', 'f'],
-  ['sfreq', 'i'], ['simp', 'f'], ['snov', 'f'], ['stalk', 'f'], ['soi', 'f'], ['mono', 'i'], ['init', 'i'],
-  ['fidRisk', 'f'],
+  ['shade', 'i'],
 ];
+const SHADE_LEVELS = 6;
+// Смесь острых тем одного человека: 0 — много хрупкого, 1 — крепко
+export function shadeOf(p) {
+  const toxic = clamp(0.25 * p.crit + 0.45 * p.contempt + 0.15 * p.defend + 0.25 * p.stone);
+  const sex = 0.6 * p.stalk + 0.4 * (1 - p.control);
+  const fid = clamp(1 - 0.8 * p.fidRisk);
+  const conflict = 0.6 * (1 - toxic) + 0.4 * p.repair;
+  const calm = 0.55 * (1 - p.anx) * (1 - p.avo) + 0.45 * (1 - p.N);
+  const ground = p.ground ?? groundOf(p);
+  return clamp(0.2 * sex + 0.12 * fid + 0.3 * conflict + 0.26 * calm + 0.12 * ground);
+}
 // Байты перемешиваются псевдослучайным потоком: код нельзя прочитать «на глаз»
 function scramble(bytes, salt) {
   let x = (0x9e3779b9 ^ Math.imul(salt + 1, 0x85ebca6b)) >>> 0;
@@ -101,7 +115,7 @@ function unb64url(str) {
 }
 
 export function encodeProfile(p) {
-  p = { ...p, ground: p.ground ?? groundOf(p) };
+  p = { ...p, shade: p.shade ?? Math.round(clamp((shadeOf(p) - 0.3) / 0.45) * (SHADE_LEVELS - 1)) };
   const nib = [];
   for (const [k, t] of FIELDS) {
     if (t === 'f') nib.push(Math.round(clamp(p[k]) * 15));
@@ -138,6 +152,7 @@ export function decodeProfile(code) {
     let j = 0;
     for (const [k, t] of FIELDS) {
       if (t === 'f') p[k] = nib[j++] / 15;
+      else if (k === 'shade') p[k] = nib[j++] / (SHADE_LEVELS - 1);
       else if (t === 'i') p[k] = nib[j++];
       else { const n = t === 'a5' ? 5 : 12; p[k] = nib.slice(j, j + n); j += n; }
     }
@@ -239,26 +254,9 @@ export function compatibility(A, B) {
   ));
   const character = clamp(1 - avg(...['E', 'A', 'C', 'O'].map(k => Math.abs(A[k] - B[k]))) * 1.6);
 
-  /* Острые темы: секс, верность, ссоры, привязанность, тревожность.
-     Наружу они выходят ТОЛЬКО одним сводным числом «Испытание», огрублённым и в тумане.
-     В нём смешаны пять областей и ответы обоих, поэтому, зная свои ответы,
-     нельзя вычесть их и понять, что ответил другой и в какой области «просело». */
-  const sexBlock = avg(
-    1 - Math.abs(A.sfreq - B.sfreq) / 7, 1 - Math.abs(A.snov - B.snov),
-    1 - 0.1 * Math.abs(A.init + B.init - 4), avg(A.stalk, B.stalk)
-  );
-  const fid = clamp(1 - 0.7 * avg(A.fidRisk, B.fidRisk) - 0.25 * Math.abs(A.mono - B.mono) / 3 + 0.1);
-  const toxic = q => clamp(0.25 * q.crit + 0.45 * q.contempt + 0.15 * q.defend + 0.25 * q.stone);
-  const conflict = clamp(0.6 * (1 - avg(toxic(A), toxic(B))) + 0.4 * avg(A.repair, B.repair));
-  const security = q => (1 - q.anx) * (1 - q.avo);
-  const sA = attachStyle(A), sB = attachStyle(B);
-  const trap = (sA === 'anxious' && (sB === 'avoidant' || sB === 'fearful')) ||
-               (sB === 'anxious' && (sA === 'avoidant' || sA === 'fearful'));
-  const calm = clamp(0.55 * avg(security(A), security(B)) + 0.45 * (1 - avg(A.N, B.N)) - (trap ? 0.1 : 0) + 0.05);
-  const trial = clamp(0.5 + 2.6 * (
-    0.22 * sexBlock + 0.18 * fid + 0.24 * conflict + 0.22 * calm +
-    0.07 * avg(A.ground, B.ground) + 0.07 * avg(A.A, B.A) - 0.555
-  ));
+  /* Острые темы приходят только одним грубым числом «тень» на человека (см. shadeOf).
+     Слабое звено весит больше: хрупкость одного чувствуется в паре сильнее. */
+  const trial = clamp(0.5 + 0.95 * (0.6 * avg(A.shade, B.shade) + 0.4 * Math.min(A.shade, B.shade) + 0.1 * avg(A.A, B.A) - 0.441));
 
   const kidsGap = Math.abs(A.kids - B.kids);
   const kidsBreaker = kidsGap >= 3 || (kidsGap >= 2 && (A.kids === 0 || A.kids === 4 || B.kids === 0 || B.kids === 4));
