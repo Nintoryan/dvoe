@@ -1,6 +1,6 @@
-import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=9';
-import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js?v=9';
-import { createWorld } from './scene.js?v=9';
+import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=10';
+import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp } from './engine.js?v=10';
+import { createWorld } from './scene.js?v=10';
 
 const $ = (s, el = document) => el.querySelector(s);
 const ui = $('#ui');
@@ -19,9 +19,11 @@ const state = {
   answers: {}, name: '', idx: 0,
   partnerCode: null, myCode: null,
 };
+const OLD_CODE = 'Этот отпечаток сделан в прошлой версии теста. Вопросы с тех пор изменились, поэтому сравнить их нельзя. Попроси человека пройти тест заново.';
 function readHash() {
   const m = location.hash.match(/with=([A-Za-z0-9_-]+)/);
   if (m && decodeProfile(m[1])) state.partnerCode = m[1];
+  else if (m && isOldCode(m[1])) setTimeout(() => toast(OLD_CODE, 6000), 2600);
 }
 readHash();
 
@@ -51,9 +53,9 @@ async function travel(realm) {
   setDark(realm);
   await world.goTo(realm, { dur: realm === 'hades' || world.current === 'hades' ? 4.2 : 3 });
 }
-function toast(text) {
+function toast(text, ms = 2600) {
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = text; document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2600);
+  setTimeout(() => t.remove(), ms);
 }
 function ask({ title, text, yes, no }) {
   return new Promise(res => {
@@ -228,6 +230,17 @@ async function renderItem({ item, section }) {
       $('#go', el).onclick = () => { state.answers[item.id] = +rg.value; world.pulse(0.4); next(); };
       break;
     }
+    case 'spectrum': {
+      // 0 и 4 — карточки-полюса, 1..3 — оттенки между ними
+      const mid = [`Скорее «${item.a.t.toLowerCase()}»`, 'Посередине / по-разному', `Скорее «${item.b.t.toLowerCase()}»`];
+      el = await show(`${head}<div class="spectrum"><div class="either">
+        <button class="card glass ${a === 0 ? 'sel' : ''}" data-v="0"><h3>${item.a.t}</h3><p>${item.a.d}</p></button>
+        <div class="or">или</div>
+        <button class="card glass ${a === 4 ? 'sel' : ''}" data-v="4"><h3>${item.b.t}</h3><p>${item.b.d}</p></button></div>
+        <div class="shades">${mid.map((t, i) => `<button class="shade glass ${a === i + 1 ? 'sel' : ''}" data-v="${i + 1}">${t}</button>`).join('')}</div></div>`);
+      el.querySelectorAll('.card, .shade').forEach(b => (b.onclick = () => choose(item.id, +b.dataset.v, el, '.card, .shade', 360)));
+      break;
+    }
     case 'alloc': renderAlloc(item, section); break;
   }
 }
@@ -241,7 +254,7 @@ async function renderAlloc(item, section) {
     <div class="alloc">${item.aspects.map((asp, i) => `
       <div class="arow glass" data-i="${i}">
         <div class="ico">${asp.ico}</div>
-        <div><h4>${asp.t}</h4><p>${asp.d}</p></div>
+        <div><h4>${asp.t}</h4><p>${asp.d}${asp.x ? `<em class="ax">${asp.x}</em>` : ''}</p></div>
         <div class="ctrl"><button data-d="-1" aria-label="Убрать">−</button><div class="pips">${'<span></span>'.repeat(10)}</div><span class="num">0</span><button data-d="1" aria-label="Добавить">+</button></div>
       </div>`).join('')}</div>
     <div class="gap"></div><div><button class="btn" id="go" disabled>Положить на весы</button></div>`);
@@ -306,10 +319,11 @@ addEventListener('keydown', e => {
   const step = STEPS[state.idx];
   if (!step || step.kind !== 'item' || hud.classList.contains('hidden')) return;
   const n = parseInt(e.key, 10);
-  const btns = [...ui.querySelectorAll('.lk, .opt, .yn button, .either .card')];
+  let btns = [...ui.querySelectorAll('.lk, .opt, .yn button, .either .card')];
+  if (step.item.type === 'spectrum') { const c = [...ui.querySelectorAll('.either .card')]; btns = [c[0], ...ui.querySelectorAll('.shade'), c[1]]; }
   if (n >= 1 && n <= btns.length) btns[n - 1].click();
   if (e.key === 'Enter') $('#go', ui)?.click();
-  if (step.item.type === 'either' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) btns[e.key === 'ArrowLeft' ? 0 : 1].click();
+  if (step.item.type === 'spectrum' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) btns[e.key === 'ArrowLeft' ? 0 : btns.length - 1].click();
   if (step.item.type === 'yn' && (e.key.toLowerCase() === 'y' || e.key.toLowerCase() === 'н')) btns[0].click();
 });
 
@@ -341,7 +355,7 @@ async function showMine() {
   const pr = portrait(me, state.heart);
   const partner = state.partnerCode ? decodeProfile(state.partnerCode) : null;
   const link = linkFor(state.myCode);
-  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=9');
+  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=10');
   const el = await show(`
     <div class="kicker">${esc(me.name || 'Безымянный')} · отпечаток от ${fmtDay(me.day)}</div>
     <div class="gap-s"></div>
@@ -367,13 +381,13 @@ async function showMine() {
     <p class="retake">Этот отпечаток — снимок сегодняшнего тебя. Эмоции, одиночество, влюблённость, свежие раны меняют его. Возвращайся через месяц или после того, что тебя изменило.</p>
     <div class="gap"></div>
     <div class="row"><button class="btn-ghost" id="again">Пройти заново</button></div>
-    <p class="disclaimer">«ДВОЕ» — рефлексивный тест, основанный на идеях из психологии отношений (Big Five, теория привязанности, исследования Дж. Готтмана и др.). Это не диагноз и не научный прогноз. Пророчество — метафора, а не приговор. Ответы не отправляются на сервер: всё считается в твоём браузере. Код-отпечаток зашифрован и содержит только сводные оценки, без отдельных ответов. Второй человек увидит лишь общее пророчество пары, размытое туманом: по нему нельзя понять, кто из вас что ответил.</p>
+    <p class="disclaimer">«ДВОЕ» — рефлексивный тест, основанный на идеях из психологии отношений (Big Five, теория привязанности, исследования Дж. Готтмана и др.). Это не диагноз и не научный прогноз. Пророчество — метафора, а не приговор. Ответы не отправляются на сервер: всё считается в твоём браузере. Код-отпечаток зашифрован и содержит только сводные оценки, без отдельных ответов. Второй человек увидит пророчество пары: по бытовым темам (ритм, деньги, порядок, выходные) оно прямо говорит, совпадаете вы или сильно расходитесь, а близость, верность, конфликты и прошлое видны только в общем виде, размытом туманом.</p>
   `, 'result');
   setTimeout(() => el.querySelectorAll('.tr i').forEach(i => (i.style.width = i.dataset.w + '%')), 400);
   $('#cp', el).onclick = () => copy(link);
   $('#cmp', el).onclick = () => {
     const raw = $('#other', el).value.trim(); const m = raw.match(/with=([A-Za-z0-9_-]+)/); const code = m ? m[1] : raw;
-    if (!decodeProfile(code)) return toast('Код не читается. Проверь, что он скопирован целиком.');
+    if (!decodeProfile(code)) return toast(isOldCode(code) ? OLD_CODE : 'Код не читается. Проверь, что он скопирован целиком.', isOldCode(code) ? 6000 : 2600);
     if (code === state.myCode) return toast('Это твой собственный отпечаток.');
     state.partnerCode = code; showPair();
   };
@@ -431,6 +445,7 @@ async function scanQR(onCode) {
     if (txt) {
       const m = txt.match(/with=([A-Za-z0-9_-]+)/); const code = m ? m[1] : txt.trim();
       if (decodeProfile(code)) { navigator.vibrate?.(40); close(); return onCode(code); }
+      if (isOldCode(code)) { close(); return toast(OLD_CODE, 6000); }
       if (!warned) { warned = true; toast('Это не QR из «ДВОЕ»'); setTimeout(() => (warned = false), 2500); }
     }
     setTimeout(tick, 120);
@@ -457,10 +472,17 @@ function ring(v, label) {
     <div class="v">${Math.round(v * 100)}</div><div class="t">${label}</div></div>`;
 }
 
+function omensBlock(list) {
+  const line = o => `<div class="omen ${o.kind}"><i>${o.kind === 'lo' ? '◇' : '✦'}</i><span>${o.t}${o.do ? `<b class="do">${o.do}</b>` : ''}<small>${o.why}</small></span></div>`;
+  const good = list.filter(o => o.kind !== 'lo'), grow = list.filter(o => o.kind === 'lo');
+  return `<div class="omens glass"><h4>Что вас держит</h4>${good.map(line).join('')}
+    ${grow.length ? `<h4 class="grow">Над чем стоит поработать</h4>${grow.map(line).join('')}` : ''}</div>`;
+}
+
 async function showPair() {
   const A = decodeProfile(state.myCode), B = decodeProfile(state.partnerCode);
   if (!A || !B) return toast('Не удалось прочитать отпечатки');
-  const P = prophecy(A, B, state.myCode, state.partnerCode);
+  const P = prophecy(A, B);
   const x = P.axes;
   if (P.key === 'serpent' || P.key === 'storm') { setDark('hades'); await world.goTo('hades', { dur: 4 }); }
   else if (world.current !== 'oracle') { setDark('oracle'); await world.goTo('oracle'); }
@@ -481,11 +503,11 @@ async function showPair() {
     </div>
     <p class="axes-cap">Чувства — совпадение в любви и сексе. Быт — деньги, порядок, ритм, ценности. Прочность — конфликты, привязанность, эмоциональная устойчивость. Верность — взгляды на моногамию и сводный риск. Семья — дети, роли, вера.</p>
     <div class="winter glass"><div class="n">${P.winter}%</div><p>Столько оракул даёт на то, что ваш союз переживёт седьмую зиму, если вы решитесь его начать.<small>Это не вероятность из исследования, а сводная оценка всех пяти осей с их весами.</small></p></div>
-    <div class="omens glass"><h4>Знамения</h4>${P.omens.map(o => `<div class="omen"><i>✦</i><span>${o.t}<small>${o.why}</small></span></div>`).join('')}</div>
+    ${omensBlock(P.omens)}
     <p class="retake">${stale ? 'Ваши отпечатки сделаны с разницей больше месяца. Один из вас уже другой человек. Пройдите заново, оба.' : 'Пророчество отражает вас обоих сейчас. Перепройдите через месяц: если кто-то из вас изменится, изменится и судьба.'}</p>
     <div class="gap"></div>
     <div class="row"><button class="btn-ghost" id="back">← Мой портрет</button><button class="btn-ghost" id="again">Пройти заново</button></div>
-    <p class="disclaimer">Пророчество собрано из общих черт пары и намеренно размыто: оно не раскрывает ответы ни одного из вас. Тест не может и не пытается предсказывать будущее или конкретные события. Он опирается на исследования психологии отношений и статистику по парам, но это не диагноз и не приговор. Используйте его как повод поговорить.</p>
+    <p class="disclaimer">Пророчество собрано из общих черт пары. Бытовые темы названы прямо, только «совпадаете» или «сильно расходитесь», без того, кто из вас какой. Чувствительные темы намеренно размыты. Тест не может и не пытается предсказывать будущее или конкретные события. Он опирается на исследования психологии отношений и статистику по парам, но это не диагноз и не приговор. Используйте его как повод поговорить.</p>
   `, 'result');
   const ps = [...el.querySelectorAll('.prophecy p')];
   ps.forEach((p, i) => setTimeout(() => p.classList.add('on'), 900 + i * 1500));
@@ -498,7 +520,8 @@ async function showPair() {
 function randomAnswers() {
   const a = {}, R = n => Math.floor(Math.random() * n);
   for (const it of ALL_ITEMS) {
-    if (it.type === 'yn' || it.type === 'either') a[it.id] = R(2);
+    if (it.type === 'yn') a[it.id] = R(2);
+    else if (it.type === 'spectrum') a[it.id] = R(5);
     else if (it.type === 'likert') a[it.id] = R(5);
     else if (it.type === 'slider') a[it.id] = it.min + R(it.max - it.min + 1);
     else if (it.type === 'choice') { const o = it.options[R(it.options.length)]; a[it.id] = typeof o === 'string' ? it.options.indexOf(o) : o.v; }
