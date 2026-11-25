@@ -1,6 +1,6 @@
-import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=7';
-import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js?v=7';
-import { createWorld } from './scene.js?v=7';
+import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=8';
+import { buildProfile, encodeProfile, decodeProfile, portrait, prophecy, clamp } from './engine.js?v=8';
+import { createWorld } from './scene.js?v=8';
 
 const $ = (s, el = document) => el.querySelector(s);
 const ui = $('#ui');
@@ -341,7 +341,7 @@ async function showMine() {
   const pr = portrait(me, state.heart);
   const partner = state.partnerCode ? decodeProfile(state.partnerCode) : null;
   const link = linkFor(state.myCode);
-  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=7');
+  const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=8');
   const el = await show(`
     <div class="kicker">${esc(me.name || 'Безымянный')} · отпечаток от ${fmtDay(me.day)}</div>
     <div class="gap-s"></div>
@@ -492,6 +492,27 @@ async function showPair() {
   $('#again', el).onclick = restart;
 }
 
+/* ---------- Демо: ?demo — два случайных отпечатка, ничего не сохраняется ---------- */
+function randomAnswers() {
+  const a = {}, R = n => Math.floor(Math.random() * n);
+  for (const it of ALL_ITEMS) {
+    if (it.type === 'yn' || it.type === 'either') a[it.id] = R(2);
+    else if (it.type === 'likert') a[it.id] = R(5);
+    else if (it.type === 'slider') a[it.id] = it.min + R(it.max - it.min + 1);
+    else if (it.type === 'choice') { const o = it.options[R(it.options.length)]; a[it.id] = typeof o === 'string' ? it.options.indexOf(o) : o.v; }
+    else if (it.type === 'alloc') { const v = [0, 0, 0, 0, 0]; for (let k = 0; k < 10; k++) v[R(5)]++; a[it.id] = v; }
+  }
+  return a;
+}
+async function demo() {
+  const me = buildProfile(randomAnswers(), 'Ты');
+  state.myCode = encodeProfile(me); state.heart = me.heart;
+  state.partnerCode = encodeProfile(buildProfile(randomAnswers(), 'Демо'));
+  hud.classList.add('hidden');
+  await travel('oracle');
+  showMine();
+}
+
 /* ---------- Старт ---------- */
 (async () => {
   world = await createWorld($('#world'));
@@ -500,6 +521,7 @@ async function showPair() {
   $('#loading').classList.add('gone');
   world.startIntro();
   await sleep(1800);
+  if (new URLSearchParams(location.search).has('demo')) return demo();
   landing();
 })();
 
