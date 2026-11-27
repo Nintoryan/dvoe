@@ -347,7 +347,7 @@ body.reading.dark #veil { background: radial-gradient(ellipse 70% 65% at 50% 50%
 .heartmap .dot { fill: var(--gold); } .heartmap .halo { fill: var(--gold-soft); opacity: .45; }
 .counts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 26px; margin-top: 22px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
 .counts b { font-family: var(--serif); font-size: 22px; letter-spacing: 0; color: var(--gold); margin-right: 4px; }
-.seasons { max-width: 980px; width: 100%; margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.seasons { max-width: 980px; width: 100%; margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .season { padding: 26px 20px 22px; text-align: center; }
 .season .sg { font-size: 26px; color: var(--gold); line-height: 1; }
 .season .sn { font-family: var(--serif); font-weight: 900; font-size: 26px; margin-top: 8px; }
@@ -362,9 +362,27 @@ body.reading.dark #veil { background: radial-gradient(ellipse 70% 65% at 50% 50%
   .sec { padding: 26px 22px; }
   .duo { grid-template-columns: 1fr; gap: 0; }
   .duo.in { gap: 18px; }
-  .seasons { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seasons { grid-template-columns: 1fr; gap: 8px; }
   .season { padding: 20px 14px; }
   .mini { grid-template-columns: 1fr 64px 84px; gap: 8px; }
+}
+
+
+/* Седьмая зима */
+.winter-card h5 { font-size: 11px; letter-spacing: .26em; text-transform: uppercase; color: var(--ink); opacity: .75; margin-top: 26px; font-weight: 700; }
+.wz { display: flex; gap: 26px; align-items: center; }
+.wz .wn { font-family: var(--serif); font-weight: 900; font-size: clamp(64px, 8vw, 104px); line-height: .9; color: var(--gold); }
+.wz .big-name { margin-top: 0; }
+.winter-card .cap { margin: 14px 0 0; }
+.wpart small { font-size: 11px; color: var(--ink-faint); margin-left: 4px; }
+.wpart em { white-space: normal; }
+.steps3 { display: flex; gap: 5px; }
+.steps3 i { flex: 1; height: 6px; border-radius: 4px; background: var(--ink-faint); }
+.steps3 i.on { background: var(--gold); }
+.wpart { grid-template-columns: 1fr 120px 170px; }
+@media (max-width: 760px) {
+  .wz { flex-direction: column; text-align: center; gap: 10px; }
+  .wpart { grid-template-columns: 1fr 64px 110px; }
 }
 
 /* WebKit обрезает текст по рамке блока, пока на нём висит filter (анимация rise).

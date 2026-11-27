@@ -1,6 +1,6 @@
 import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=11';
-import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, LEAD_TRAITS } from './engine.js?v=13';
-import { deepPortrait } from './reading.js?v=13';
+import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, LEAD_TRAITS } from './engine.js?v=14';
+import { deepPortrait } from './reading.js?v=14';
 import { createWorld } from './scene.js?v=10';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -450,6 +450,23 @@ function deepMine(me) {
     ${sec('Кто тебе подойдёт', `<div class="duo in"><div><b class="ok">С кем легко</b>${d.match.easy.map(t => `<p>${t}</p>`).join('')}</div><div><b class="no">С кем трудно</b>${d.match.hard.map(t => `<p>${t}</p>`).join('')}</div></div>`)}`;
 }
 
+
+function winterBlock(W) {
+  const steps = L => `<span class="steps3">${[0, 1, 2].map(i => `<i class="${i <= L ? 'on' : ''}"></i>`).join('')}</span>`;
+  const rows = W.parts.map(p => `<div class="mini wpart"><span>${p.t} <small>вес ${p.w}%</small></span>${p.v != null ? `${meter(p.v)}<em>${p.v}%</em>` : `${steps(p.L)}<em>${p.word.toLowerCase()}</em>`}</div>`).join('');
+  return sec('❄ Седьмая зима', `
+    <div class="wz"><div class="wn">${W.pct}%</div><div><div class="big-name">${W.level}</div><p>${W.text}</p></div></div>
+    <h5>Что это</h5>
+    <p>Сводная оценка того, переживёт ли ваш союз — если вы решитесь его начать — седьмую зиму, то есть первые семь лет вместе. Это то же число, что в строке под вердиктом.</p>
+    <h5>Почему именно седьмая</h5>
+    <p>«Седьмая зима» — образ, но за ним стоят данные. Удовлетворённость браком в среднем снижается в первые годы, и у многих пар заметный спад приходится на конец первого десятилетия (Kurdek, 1999). Браки, которые заканчиваются разводом, в среднем длятся около 7–8 лет (U.S. Census Bureau). Отсюда и знаменитый «кризис семи лет»: к этому времени уходит влюблённость, и пару держит уже не она, а то, как вы живёте и ссоритесь.</p>
+    <h5>Из чего складывается</h5>
+    ${rows}
+    <p class="cap">Больше всего весит «Испытание». В долгих исследованиях пар судьбу союза сильнее предсказывает то, как партнёры проходят стресс, ссорятся и мирятся, чем исходное сходство (Karney & Bradbury, 1995; Gottman, 1994). Поэтому сходство в быту или притяжение не перевешивают хрупкость в трудном. «Испытание» и «Семья» показаны только уровнем, чтобы по ним нельзя было вычислить ответы другого.</p>
+    <h5>Как это читать</h5>
+    <p>Это не вероятность из исследования и не прогноз событий. Это взвешенная сумма четырёх составляющих, растянутая так, чтобы у двух случайных людей выходило около 50%. Выше 65% — ваши опоры заметно перевешивают трудности. Ниже 45% — союз возможен, но многое будет держаться на сознательных усилиях. Число меняется, когда меняетесь вы: перепройдите тест через месяц.</p>`, 'winter-card');
+}
+
 function deepPair(P) {
   const seasons = P.seasons.map(s => `<div class="season glass L${s.L}">
       <div class="sg">${s.glyph}</div><div class="sn">${s.name}</div><div class="ss">${s.sub}</div>
@@ -462,7 +479,8 @@ function deepPair(P) {
   const word = m => (m >= 0.85 ? 'совпадаете' : m >= 0.5 ? 'близко' : m >= 0.2 ? 'по-разному' : 'расходитесь');
   return `
     <div class="seasons">${seasons}</div>
-    <p class="axes-cap">Весна — как вы попадаете друг в друга. Лето — деньги, дом, ритм, ценности. Осень — пять хрупких тем сразу: близость, доверие, ссоры, страх потерять, устойчивость. Она складывается из ответов обоих и не раскладывается обратно — ни по темам, ни по людям, поэтому показана только уровнем. Зима — итог всех сезонов.</p>
+    <p class="axes-cap">Весна — как вы попадаете друг в друга. Лето — деньги, дом, ритм, ценности. Осень — пять хрупких тем сразу: близость, доверие, ссоры, страх потерять, устойчивость. Она складывается из ответов обоих и не раскладывается обратно — ни по темам, ни по людям, поэтому показана только уровнем.</p>
+    ${winterBlock(P.winterCard)}
     ${sec('Сочетание характеров', `<div class="big-name">${T.t}</div><p class="nums">Ведущая черта: ${esc(P.nA)} — ${eA.name.toLowerCase()} · ${esc(P.nB)} — ${eB.name.toLowerCase()}</p><p>${T.d}</p><p class="ls"><span>Сильные стороны:</span> ${T.light}</p><p class="ls sh"><span>Риски:</span> ${T.shadow}</p>`)}
     ${sec('Как вы попадаете в чаши друг друга', `<p class="cap">Сколько из того, как один естественно проявляет любовь, ложится туда, где её ждёт другой.</p>${love(P.nA, P.nB, P.love.ab)}${love(P.nB, P.nA, P.love.ba)}`)}
     <div class="duo">

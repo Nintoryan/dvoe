@@ -617,18 +617,30 @@ export function prophecy(A, B) {
     : 'Основа: «Испытание». Дети усваивают модель отношений родителей: у детей из конфликтных семей выше риск собственного развода (Amato, 1996), а умение родителей мириться этот риск снижает.';
 
   const winter = Math.round(clamp(c.overallF * 1.15 - 0.08, 0.04, 0.96) * 100);
-  const vals = { attraction: x.attraction, everyday: x.everyday, trial: x.trial, winter: winter / 100 };
-  const seasons = SEASONS.map(s => {
+  const vals = { attraction: x.attraction, everyday: x.everyday, trial: x.trial };
+  const seasons = SEASONS.filter(s => s.k !== 'winter').map(s => {
     const v = vals[s.k], L = lvl(v);
     return { ...s, v: s.k === 'trial' ? Math.round(v * 10) / 10 : Math.round(v * 20) / 20, level: s.lv[L], text: s.t[L], L };
   });
+
+  // Седьмая зима — отдельная карточка; число то же, что в счётчике сверху
+  const WS = SEASONS.find(s => s.k === 'winter'), WL = lvl(winter / 100), TL = lvl(x.trial), FL = lvl(x.family);
+  const winterCard = {
+    pct: winter, L: WL, level: WS.lv[WL], text: WS.t[WL],
+    parts: [
+      { t: 'Притяжение', w: 25, v: Math.round(x.attraction * 20) * 5 },
+      { t: 'Быт', w: 22, v: Math.round(x.everyday * 20) * 5 },
+      { t: 'Испытание', w: 40, L: TL, word: SEASONS[2].lv[TL] },
+      { t: 'Семья', w: 13, L: FL, word: ['Картины будущего расходятся', 'Есть о чём договориться', 'Планы на будущее совпадают'][FL] },
+    ],
+  };
 
   const love = { ab: bowls(A, B), ba: bowls(B, A) };
   const habits = A.habits.map((h, i) => ({ t: HABIT_LABELS[i], m: NEAR[Math.abs(h - B.habits[i])] }));
   const axes = {}; for (const k in x) axes[k] = Math.round(x[k] * 20) / 20;
   axes.trial = x.trial;
   return {
-    key, fate, axes, omens, counts, children, childrenWhy, winter, nA, nB, seasons,
+    key, fate, axes, omens, counts, children, childrenWhy, winter, winterCard, nA, nB, seasons,
     type: pairType(A, B), rhythm: pairRhythm(A, B), love, habits,
   };
 }
