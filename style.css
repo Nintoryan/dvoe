@@ -375,3 +375,7 @@ body.reading.dark #veil { background: radial-gradient(ellipse 70% 65% at 50% 50%
 /* Без зума по двойному тапу на телефоне (щипок остаётся — это важно для доступности).
    touch-action не наследуется и считается до ближайшего скролл-контейнера (#ui), поэтому на всё. */
 *, *::before, *::after { touch-action: manipulation; }
+
+/* На экранах результатов блоки непрозрачные: сквозь стекло 3D-сцена мешала читать */
+.result .glass { background: #fbfaf7; -webkit-backdrop-filter: none; backdrop-filter: none; }
+body.dark .result .glass { background: #1c0606; }
