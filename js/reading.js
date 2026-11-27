@@ -1,7 +1,7 @@
 // Развёрнутый личный портрет: черты личности, карта сердца, стиль ссоры, темперамент, ритм, типажи.
 // Всё это видит только сам человек. В пророчество пары острые темы попадают лишь смешанными.
-import { attachStyle } from './engine.js?v=15';
-import { LEAD_TRAITS, leadTrait, energyCurve } from './engine.js?v=15';
+import { attachStyle } from './engine.js?v=16';
+import { LEAD_TRAITS, leadTrait, energyCurve } from './engine.js?v=16';
 
 const pct = v => Math.round(v * 100);
 const lvl = v => (v >= 0.62 ? 'hi' : v <= 0.38 ? 'lo' : 'mid');

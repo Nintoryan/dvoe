@@ -1,6 +1,6 @@
 import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=11';
-import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, LEAD_TRAITS } from './engine.js?v=15';
-import { deepPortrait } from './reading.js?v=15';
+import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, LEAD_TRAITS } from './engine.js?v=16';
+import { deepPortrait } from './reading.js?v=16';
 import { createWorld } from './scene.js?v=10';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -455,7 +455,7 @@ function winterBlock(W) {
   const steps = L => `<span class="steps3">${[0, 1, 2].map(i => `<i class="${i <= L ? 'on' : ''}"></i>`).join('')}</span>`;
   const rows = W.parts.map(p => `<div class="mini wpart"><span>${p.t} <small>вес ${p.w}%</small></span>${p.v != null ? `${meter(p.v)}<em>${p.v}%</em>` : `${steps(p.L)}<em>${p.word.toLowerCase()}</em>`}</div>`).join('');
   return sec('❄ Седьмая зима', `
-    <div class="wz"><div class="wn">${W.pct}%</div><div><div class="big-name">${W.level}</div><p>${W.text}</p></div></div>
+    <div class="wz"><div class="wn">${W.pct}%</div><div><div class="big-name">Зима</div><div class="wv">${W.level}</div><p>${W.text}</p></div></div>
     <h5>Что это</h5>
     <p>Сводная оценка того, переживёт ли ваш союз — если вы решитесь его начать — седьмую зиму, то есть первые семь лет вместе. Это то же число, что в строке под вердиктом.</p>
     <h5>Почему именно седьмая</h5>

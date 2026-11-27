@@ -373,6 +373,7 @@ body.reading.dark #veil { background: radial-gradient(ellipse 70% 65% at 50% 50%
 .wz { display: flex; gap: 26px; align-items: center; }
 .wz .wn { font-family: var(--serif); font-weight: 900; font-size: clamp(64px, 8vw, 104px); line-height: .9; color: var(--gold); }
 .wz .big-name { margin-top: 0; }
+.wz .wv { font-family: var(--serif2); font-style: italic; font-weight: 400; font-size: clamp(21px, 2.2vw, 26px); line-height: 1.2; color: var(--ink-soft); margin-top: 2px; }
 .winter-card .cap { margin: 14px 0 0; }
 .wpart small { font-size: 11px; color: var(--ink-faint); margin-left: 4px; }
 .wpart em { white-space: normal; }
