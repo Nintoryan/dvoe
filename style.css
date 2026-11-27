@@ -369,7 +369,7 @@ body.reading.dark #veil { background: radial-gradient(ellipse 70% 65% at 50% 50%
 
 
 /* Седьмая зима */
-.winter-card h5 { font-size: 11px; letter-spacing: .26em; text-transform: uppercase; color: var(--ink); opacity: .75; margin-top: 26px; font-weight: 700; }
+.winter-card h5, .sec h5 { font-size: 11px; letter-spacing: .26em; text-transform: uppercase; color: var(--ink); opacity: .75; margin-top: 26px; font-weight: 700; }
 .wz { display: flex; gap: 26px; align-items: center; }
 .wz .wn { font-family: var(--serif); font-weight: 900; font-size: clamp(64px, 8vw, 104px); line-height: .9; color: var(--gold); }
 .wz .big-name { margin-top: 0; }

@@ -1,6 +1,6 @@
 import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=11';
-import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, LEAD_TRAITS } from './engine.js?v=14';
-import { deepPortrait } from './reading.js?v=14';
+import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, LEAD_TRAITS } from './engine.js?v=15';
+import { deepPortrait } from './reading.js?v=15';
 import { createWorld } from './scene.js?v=10';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -474,14 +474,16 @@ function deepPair(P) {
       <div class="sl">${s.level}</div><p>${s.text}</p></div>`).join('');
   const T = P.type, eA = LEAD_TRAITS[T.a], eB = LEAD_TRAITS[T.b];
   const love = (from, to, l) => `<div class="lv"><div class="th"><b>${esc(from)} → ${esc(to)}</b><em>${l.pct}%</em></div>${meter(l.pct)}
-      <p>Лучше всего доходит: «${l.best}».${l.miss ? ` Меньше всего хватает: «${l.miss}».` : ''}</p></div>`;
+      <p>${l.partial ? `Лучше всего доходит «${l.best}», но этого ждут ещё больше, чем получают.` : `Лучше всего доходит: «${l.best}».${l.miss ? ` Меньше всего хватает: «${l.miss}».` : ''}`}</p></div>`;
   const R = P.rhythm;
   const word = m => (m >= 0.85 ? 'совпадаете' : m >= 0.5 ? 'близко' : m >= 0.2 ? 'по-разному' : 'расходитесь');
   return `
     <div class="seasons">${seasons}</div>
     <p class="axes-cap">Весна — как вы попадаете друг в друга. Лето — деньги, дом, ритм, ценности. Осень — пять хрупких тем сразу: близость, доверие, ссоры, страх потерять, устойчивость. Она складывается из ответов обоих и не раскладывается обратно — ни по темам, ни по людям, поэтому показана только уровнем.</p>
     ${winterBlock(P.winterCard)}
-    ${sec('Сочетание характеров', `<div class="big-name">${T.t}</div><p class="nums">Ведущая черта: ${esc(P.nA)} — ${eA.name.toLowerCase()} · ${esc(P.nB)} — ${eB.name.toLowerCase()}</p><p>${T.d}</p><p class="ls"><span>Сильные стороны:</span> ${T.light}</p><p class="ls sh"><span>Риски:</span> ${T.shadow}</p>`)}
+    ${sec('Сочетание характеров', `<div class="big-name">${T.t}</div><p class="nums">Ведущая черта: ${esc(P.nA)} — ${eA.name.toLowerCase()} · ${esc(P.nB)} — ${eB.name.toLowerCase()}</p><p>${T.d}</p>
+      <h5>В повседневности</h5><p>${T.daily}</p><h5>В споре</h5><p>${T.conflict}</p>
+      <p class="ls"><span>Сильные стороны:</span> ${T.light}</p><p class="ls sh"><span>Риски:</span> ${T.shadow}</p><p class="ls"><span>Что помогает:</span> ${T.tip}</p>`)}
     ${sec('Как вы попадаете в чаши друг друга', `<p class="cap">Сколько из того, как один естественно проявляет любовь, ложится туда, где её ждёт другой.</p>${love(P.nA, P.nB, P.love.ab)}${love(P.nB, P.nA, P.love.ba)}`)}
     <div class="duo">
       ${sec('Ритм пары', `${curveSvg(R.both, [R.from, R.to])}<p>${R.gap >= 3 ? `Ваши пики энергии далеко друг от друга. Полностью «включены» вы оба примерно с ${R.from}:00 до ${R.to}:00 — берегите эти часы для важного.` : `Ваша общая энергия — примерно с ${R.from}:00 до ${R.to}:00. В эти часы вам легче всего говорить, решать и радоваться вместе.`}</p>`)}
