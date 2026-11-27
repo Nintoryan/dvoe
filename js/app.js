@@ -191,7 +191,8 @@ function choose(id, v, el, selector, delay = 420) {
 }
 
 async function renderItem({ item, section }) {
-  const head = `<div class="kicker">${section.num} · ${section.title}</div><div class="gap-s"></div><div class="q">${item.q}</div>${item.hint ? `<p class="hint">${item.hint}</p>` : ''}`;
+  // раздел уже написан в шапке; вместо дубля — отступ примерно в половину его высоты
+  const head = `<div class="kick-gap"></div><div class="gap-s"></div><div class="q">${item.q}</div>${item.hint ? `<p class="hint">${item.hint}</p>` : ''}`;
   const a = state.answers[item.id];
   let el;
   switch (item.type) {
@@ -252,7 +253,7 @@ async function renderItem({ item, section }) {
 async function renderAlloc(item, section) {
   const vals = (state.answers[item.id] || [0, 0, 0, 0, 0]).slice();
   const el = await show(`
-    <div class="kicker">${section.num} · ${section.title}</div><div class="gap-s"></div>
+    <div class="kick-gap"></div><div class="gap-s"></div>
     <div class="q">${item.q}</div><p class="hint">${item.hint}</p>
     <div class="pool" id="pool"><span class="n" id="left">10</span><span class="l">крупиц из 10 осталось —<br>это на все пять чаш вместе</span></div>
     <div class="alloc">${item.aspects.map((asp, i) => `
