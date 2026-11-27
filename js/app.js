@@ -1,6 +1,6 @@
 import { SECTIONS, ALL_ITEMS, SCALE_LABELS } from './content.js?v=11';
-import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, ELEMENTS } from './engine.js?v=12';
-import { deepPortrait } from './reading.js?v=12';
+import { buildProfile, encodeProfile, decodeProfile, isOldCode, portrait, prophecy, clamp, LEAD_TRAITS } from './engine.js?v=13';
+import { deepPortrait } from './reading.js?v=13';
 import { createWorld } from './scene.js?v=10';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -360,14 +360,14 @@ async function showMine() {
   const pr = portrait(me, state.heart);
   const partner = state.partnerCode ? decodeProfile(state.partnerCode) : null;
   const link = linkFor(state.myCode);
-  const el0 = deepPortrait(me).element;
+  const lead = deepPortrait(me).lead;
   const { LOVE_ASPECTS, COMFORT_ASPECTS } = await import('./content.js?v=11');
   const el = await show(`
     <div class="kicker">${esc(me.name || 'Безымянный')} · отпечаток от ${fmtDay(me.day)}</div>
     <div class="gap-s"></div>
     <div class="arch-name">${pr.noun}</div>
     <div class="arch-sub">${pr.attach}</div>
-    <div class="elem">${el0.glyph} Стихия — <b>${el0.name}</b>: ${el0.d}</div>
+    <div class="elem">Ведущая черта — <b>${lead.name}</b>. ${lead.d}</div>
     <div class="paper glass">${pr.lines.map(l => `<p>${l}</p>`).join('')}${pr.now ? `<p><em>${pr.now}</em></p>` : ''}</div>
     <div class="bars">
       ${bars('Чтобы чувствовать любовь', LOVE_ASPECTS, me.rec)}
@@ -434,11 +434,11 @@ function heartSvg(h) {
 function deepMine(me) {
   const d = deepPortrait(me);
   const traits = d.traits.map(t => `<div class="trait">
-      <div class="th"><b>${t.name}</b><span>${t.sci}</span><em>${t.v}%</em></div>${meter(t.v)}
-      <p>${t.t}</p>${t.light ? `<p class="ls"><span>В свету:</span> ${t.light}</p><p class="ls sh"><span>В тени:</span> ${t.shadow}</p>` : ''}</div>`).join('');
+      <div class="th"><b>${t.name}</b><em>${t.v}%</em></div>${meter(t.v)}
+      <p>${t.t}</p>${t.light ? `<p class="ls"><span>Сильные стороны:</span> ${t.light}</p><p class="ls sh"><span>Риски:</span> ${t.shadow}</p>` : ''}</div>`).join('');
   const riders = d.rider.riders.map(r => `<div class="mini"><span>${r.name}</span>${meter(r.v)}<em>${r.v}%</em></div>`).join('');
   return `
-    ${sec('Пять стихий характера', `<p class="cap">Пять черт, на которых держится психология личности (модель «Большой пятёрки»). Ни один полюс не лучше другого: у каждого есть свет и тень.</p>${traits}`)}
+    ${sec('Пять черт личности', `<p class="cap">Модель «Большой пятёрки» — самая изученная модель личности в психологии. Ни один полюс черты не лучше другого: у каждого есть сильные стороны и риски.</p>${traits}`)}
     <div class="duo">
       ${sec('Карта сердца', `${heartSvg(d.heart)}<div class="big-name">${d.heart.name}</div><p>${d.heart.d}</p><p class="nums">тревога ${d.heart.anx}% · дистанция ${d.heart.avo}%</p>`)}
       ${sec('Твой всадник в ссоре', `<div class="big-name">${d.rider.name}</div><p>${d.rider.d}</p><p class="ls"><span>Противоядие:</span> ${d.rider.fix}</p>${riders}<div class="mini"><span>Умение мириться</span>${meter(d.rider.repair)}<em>${d.rider.repair}%</em></div>`)}
@@ -455,7 +455,7 @@ function deepPair(P) {
       <div class="sg">${s.glyph}</div><div class="sn">${s.name}</div><div class="ss">${s.sub}</div>
       ${s.k === 'trial' ? `<div class="sv steps">${[0, 1, 2].map(i => `<i class="${i <= s.L ? 'on' : ''}"></i>`).join('')}</div>` : `<div class="sv">${Math.round(s.v * 100)}%</div>`}
       <div class="sl">${s.level}</div><p>${s.text}</p></div>`).join('');
-  const T = P.type, eA = ELEMENTS[T.a], eB = ELEMENTS[T.b];
+  const T = P.type, eA = LEAD_TRAITS[T.a], eB = LEAD_TRAITS[T.b];
   const love = (from, to, l) => `<div class="lv"><div class="th"><b>${esc(from)} → ${esc(to)}</b><em>${l.pct}%</em></div>${meter(l.pct)}
       <p>Лучше всего доходит: «${l.best}».${l.miss ? ` Меньше всего хватает: «${l.miss}».` : ''}</p></div>`;
   const R = P.rhythm;
@@ -463,7 +463,7 @@ function deepPair(P) {
   return `
     <div class="seasons">${seasons}</div>
     <p class="axes-cap">Весна — как вы попадаете друг в друга. Лето — деньги, дом, ритм, ценности. Осень — пять хрупких тем сразу: близость, доверие, ссоры, страх потерять, устойчивость. Она складывается из ответов обоих и не раскладывается обратно — ни по темам, ни по людям, поэтому показана только уровнем. Зима — итог всех сезонов.</p>
-    ${sec('Тип пары', `<div class="big-name">${T.t}</div><p class="nums">${esc(P.nA)} — ${eA.name} ${eA.glyph} · ${esc(P.nB)} — ${eB.name} ${eB.glyph}</p><p>${T.d}</p><p class="ls"><span>В свету:</span> ${T.light}</p><p class="ls sh"><span>В тени:</span> ${T.shadow}</p>`)}
+    ${sec('Сочетание характеров', `<div class="big-name">${T.t}</div><p class="nums">Ведущая черта: ${esc(P.nA)} — ${eA.name.toLowerCase()} · ${esc(P.nB)} — ${eB.name.toLowerCase()}</p><p>${T.d}</p><p class="ls"><span>Сильные стороны:</span> ${T.light}</p><p class="ls sh"><span>Риски:</span> ${T.shadow}</p>`)}
     ${sec('Как вы попадаете в чаши друг друга', `<p class="cap">Сколько из того, как один естественно проявляет любовь, ложится туда, где её ждёт другой.</p>${love(P.nA, P.nB, P.love.ab)}${love(P.nB, P.nA, P.love.ba)}`)}
     <div class="duo">
       ${sec('Ритм пары', `${curveSvg(R.both, [R.from, R.to])}<p>${R.gap >= 3 ? `Ваши пики энергии далеко друг от друга. Полностью «включены» вы оба примерно с ${R.from}:00 до ${R.to}:00 — берегите эти часы для важного.` : `Ваша общая энергия — примерно с ${R.from}:00 до ${R.to}:00. В эти часы вам легче всего говорить, решать и радоваться вместе.`}</p>`)}
