@@ -6,6 +6,8 @@ import { createWorld } from './scene.js?v=10';
 const $ = (s, el = document) => el.querySelector(s);
 const ui = $('#ui');
 const hud = $('#hud');
+// Высота шапки — для маски: контент, уезжающий под шапку при прокрутке, плавно скрывается
+new ResizeObserver(() => document.documentElement.style.setProperty('--hud-h', hud.offsetHeight + 'px')).observe(hud);
 const modal = $('#modal');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -252,12 +254,12 @@ async function renderAlloc(item, section) {
   const el = await show(`
     <div class="kicker">${section.num} · ${section.title}</div><div class="gap-s"></div>
     <div class="q">${item.q}</div><p class="hint">${item.hint}</p>
-    <div class="pool" id="pool"><span class="n" id="left">10</span><span class="l">крупиц<br>осталось</span></div>
+    <div class="pool" id="pool"><span class="n" id="left">10</span><span class="l">крупиц из 10 осталось —<br>это на все пять чаш вместе</span></div>
     <div class="alloc">${item.aspects.map((asp, i) => `
       <div class="arow glass" data-i="${i}">
         <div class="ico">${asp.ico}</div>
         <div><h4>${asp.t}</h4><p>${asp.d}${asp.x ? `<em class="ax">${asp.x}</em>` : ''}</p></div>
-        <div class="ctrl"><button data-d="-1" aria-label="Убрать">−</button><div class="pips">${'<span></span>'.repeat(10)}</div><span class="num">0</span><button data-d="1" aria-label="Добавить">+</button></div>
+        <div class="ctrl"><button data-d="-1" aria-label="Убрать">−</button><div class="pips">${'<span></span>'.repeat(5)}<i class="gate"></i>${'<span class="x"></span>'.repeat(5)}</div><span class="num">0</span><button data-d="1" aria-label="Добавить">+</button></div>
       </div>`).join('')}</div>
     <div class="gap"></div><div><button class="btn" id="go" disabled>Положить на весы</button></div>`);
   const total = item.total;
@@ -266,7 +268,13 @@ async function renderAlloc(item, section) {
     $('#left', el).textContent = left;
     $('#pool', el).classList.toggle('empty', left === 0);
     el.querySelectorAll('.arow').forEach((row, i) => {
-      row.querySelectorAll('.pips span').forEach((p, k) => p.classList.toggle('on', k < vals[i]));
+      // деления, до которых не дотянуться оставшимися крупицами, почти гаснут: видно, что 10 — на все чаши
+      row.querySelectorAll('.pips span').forEach((p, k) => { p.classList.toggle('on', k < vals[i]); p.classList.toggle('lock', k >= vals[i] + left); });
+      // по умолчанию видно 5 делений и порог: это распределение, а не оценка каждой чаши.
+      // Шестая крупица «пробивает» порог — тогда открываются деления 6–10.
+      const over = vals[i] > 5;
+      if (over && !row.classList.contains('over')) { row.classList.remove('breach'); void row.offsetWidth; row.classList.add('breach'); }
+      row.classList.toggle('over', over);
       $('.num', row).textContent = vals[i];
       row.querySelector('[data-d="1"]').disabled = left === 0;
       row.querySelector('[data-d="-1"]').disabled = vals[i] === 0;

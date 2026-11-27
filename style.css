@@ -174,8 +174,20 @@ body.dark .shade.sel { color: #1a0303; }
 @media (hover: hover) { .ctrl button:hover { background: var(--ink); color: #fff; border-color: var(--ink); } }
 @media (hover: hover) { body.dark .ctrl button:hover { color: #1a0303; } }
 .ctrl button:disabled { opacity: .2; pointer-events: none; }
-.pips { display: flex; gap: 5px; }
-.pips span { width: 11px; height: 26px; border-radius: 6px; background: var(--ink-faint); opacity: .35; transition: all .35s var(--ease); }
+.pips { display: flex; align-items: center; }
+.pips span { width: 11px; height: 26px; margin-right: 5px; border-radius: 6px; background: var(--ink-faint); opacity: .35; transition: all .35s var(--ease); }
+/* Порог после пятой крупицы: деления 6–10 спрятаны, пока его не «пробьют» */
+.pips .gate { width: 2px; height: 34px; margin: 0 7px 0 2px; border-radius: 2px; background: var(--gold); opacity: .55; transition: all .5s var(--ease); }
+.pips span.x { width: 0; margin-right: 0; opacity: 0; }
+.arow.over .pips span.x { width: 11px; margin-right: 5px; opacity: .35; }
+.arow.over .pips span.x.lock { opacity: .07; }
+.arow.over .pips span.x.on { opacity: 1; }
+.arow.over .pips .gate { opacity: .18; height: 20px; }
+.arow.breach .pips .gate { animation: breach .7s var(--ease); }
+.arow.breach .ctrl { animation: shove .5s var(--ease); }
+@keyframes breach { 0% { opacity: 1; height: 34px; box-shadow: 0 0 0 var(--gold-soft); } 30% { opacity: 1; height: 44px; transform: scaleX(3); box-shadow: 0 0 24px var(--gold); } 100% { opacity: .18; height: 20px; transform: none; box-shadow: none; } }
+@keyframes shove { 0%, 100% { transform: none; } 25% { transform: translateX(5px); } 55% { transform: translateX(-3px); } }
+.pips span.lock { opacity: .07; }
 .pips span.on { opacity: 1; background: linear-gradient(180deg, var(--gold-soft), var(--gold)); box-shadow: 0 0 14px var(--gold-soft); }
 .ctrl .num { font-family: var(--serif); font-weight: 900; font-size: 30px; min-width: 34px; text-align: center; }
 
@@ -275,7 +287,9 @@ body.dark .toast { color: #1a0303; }
   .arow { grid-template-columns: 1fr; gap: 10px; padding: 16px; }
   .arow .ico { display: none; }
   .ctrl { justify-content: space-between; }
-  .pips span { width: 8px; height: 20px; }
+  .pips span { width: 8px; height: 20px; margin-right: 4px; }
+  .arow.over .pips span.x { width: 8px; margin-right: 4px; }
+  .pips .gate { height: 28px; margin: 0 5px 0 1px; }
   .paper, .omens, .lovemap { padding: 28px 22px; }
   .share { grid-template-columns: 1fr; padding: 28px 22px; justify-items: center; text-align: center; }
   .axes { grid-template-columns: repeat(3, 1fr); }
@@ -398,3 +412,9 @@ body.reading.dark #veil { background: radial-gradient(ellipse 70% 65% at 50% 50%
 /* На экранах результатов блоки непрозрачные: сквозь стекло 3D-сцена мешала читать */
 .result .glass { background: #fbfaf7; -webkit-backdrop-filter: none; backdrop-filter: none; }
 body.dark .result .glass { background: #1c0606; }
+
+/* Пока видна шапка, контент под ней при прокрутке скрывается по её нижнему краю */
+body:has(#hud:not(.hidden)) #ui {
+  -webkit-mask-image: linear-gradient(to bottom, transparent calc(var(--hud-h, 94px) - 6px), #000 calc(var(--hud-h, 94px) + 22px));
+  mask-image: linear-gradient(to bottom, transparent calc(var(--hud-h, 94px) - 6px), #000 calc(var(--hud-h, 94px) + 22px));
+}
